@@ -6,11 +6,13 @@ import System.IO
 import Control.Concurrent.STM    (TQueue, atomically, newTQueueIO, tryReadTQueue, writeTQueue)
 import Control.Monad             (unless, when, void)
 import Control.Monad.RWS.Strict  (RWST, ask, asks, evalRWST, get, gets, modify, put, liftIO, liftM)
-import Foreign.C.String          (CString, newCString)
+import Foreign.C.String          (CString, newCString, peekCString)
 import Foreign.C.Types           (CInt)
-import Foreign.Ptr               (Ptr, nullPtr)
+import Foreign.Marshal.Alloc     (malloc, free)
+import Foreign.Ptr               (Ptr)
 import Foreign.Storable          (peek)
 import Data.Bits                 ((.|.))
+import Data.Word                 (Word32)
 
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.SDL           as SDL
@@ -23,6 +25,7 @@ import Vec3D
 
 data Env = Env
     { envWindow        :: !SDL.Window
+    , envFPS           :: !Int
     , envZDistClosest  :: !Double
     , envZDistFarthest :: !Double
     , envBoidDispList  :: !GL.DisplayList
@@ -30,6 +33,8 @@ data Env = Env
 
 data State = State
     { stateRunning         :: !Bool
+    , stateGameTime        :: !Word32
+    , stateDt              :: !Word32
     , stateWindowWidth     :: !Int
     , stateWindowHeight    :: !Int
     , stateXAngle          :: !Double
@@ -75,12 +80,15 @@ main = do
             zDist         = zDistClosest + ((zDistFarthest - zDistClosest) / 2)
             env = Env
               { envWindow        = win
+              , envFPS           = 30
               , envZDistClosest  = zDistClosest
               , envZDistFarthest = zDistFarthest
               , envBoidDispList  = bDispList
               }
             state = State
               { stateRunning         = True
+              , stateGameTime        = 0
+              , stateDt              = 0
               , stateWindowWidth     = width
               , stateWindowHeight    = height
               , stateXAngle          = 0
@@ -105,11 +113,10 @@ main = do
 
 withWindow :: Int -> Int -> String -> (SDL.Window -> IO ()) -> IO ()
 withWindow w h title f = do
-    withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "1")
-    --i <- SDL.init (SDL.initFlagVideo .|. SDL.initFlagEvents)
-    i <- SDL.init (SDL.initFlagEverything)
-    withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "2")
-    unless (i /= 0) $ do
+    --withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "1")
+    i <- SDL.init (SDL.initFlagVideo .|. SDL.initFlagEvents .|. SDL.initFlagTimer)
+    if i == 0
+      then do
         cstr <- newCString title
         win  <- SDL.createWindow cstr 100 100 (fi w) (fi h) (SDL.windowFlagOpenGL)
         con  <- SDL.glCreateContext win
@@ -117,6 +124,9 @@ withWindow w h title f = do
         SDL.glDeleteContext con
         SDL.destroyWindow   win
         SDL.quit
+      else do
+        err <- SDL.getError >>= peekCString
+        withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show err)
     where fi = fromIntegral
 
 --------------------------------------------------------------------------------
@@ -126,63 +136,78 @@ runDemo env state = void $ evalRWST run env state
 
 run :: Demo ()
 run = do
-    --adjustWindow
-    --win <- asks envWindow
+    currTime <- liftIO SDL.getTicks
+    adjustWindow
+    win <- asks envWindow
+    state <- get
 
-    --draw
-    --liftIO $ do
-    --    GLFW.swapBuffers win
-    --    GL.flush  -- not necessary, but someone recommended it
-    --    GLFW.pollEvents
-    --processEvents
+    draw
+    liftIO $ do
+        SDL.glSwapWindow win
+        GL.flush  -- not necessary, but someone recommended it
+    processEvents
 
-    --state <- get
 
-    --let boids = stateBoids state
-    --modify $ \s -> s {
-    --    stateBoids = map (\b -> updateBoid b boids) boids
-    --    }
+    let boids = stateBoids state
+    modify $ \s -> s {
+        stateBoids = map (\b -> updateBoid b boids) boids
+        }
 
-    liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "3")
+    --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "3")
 
-    dragging <- gets stateDragging 
-    when dragging $ do
-        state <- get
-        win   <- asks envWindow
+    when (stateDragging state) $ do
         let sodx  = stateDragStartX      state
             sody  = stateDragStartY      state
             sodxa = stateDragStartXAngle state
             sodya = stateDragStartYAngle state
-        let xPtr = nullPtr :: Ptr CInt
-            yPtr = nullPtr :: Ptr CInt
+        xPtr <- liftIO malloc :: Demo (Ptr CInt)
+        yPtr <- liftIO malloc :: Demo (Ptr CInt)
         void $ liftIO $ SDL.getMouseState xPtr yPtr
         x <- liftM fromIntegral $ liftIO $ peek xPtr :: Demo Int
         y <- liftM fromIntegral $ liftIO $ peek yPtr :: Demo Int
         let myrot = div (x - sodx) 2
             mxrot = div (y - sody) 2
-        put $ state
+        liftIO $ free xPtr
+        liftIO $ free yPtr
+        modify $ \s -> s
           { stateXAngle = sodxa + (fromIntegral mxrot)
           , stateYAngle = sodya + (fromIntegral myrot)
           }
 
-    --mt <- liftIO GLFW.getTime
+    newTime <- liftIO SDL.getTicks
+    modify $ \s -> s
+      { stateGameTime = currTime
+      , stateDt       = newTime - stateGameTime state
+      }
 
-    running <- gets stateRunning
-    when running run
+    --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show running)
+    remainingTime <- remainingFrameTime
+    liftIO $ SDL.delay remainingTime
+    when (stateRunning state) run
+
+remainingFrameTime :: Demo Word32
+remainingFrameTime = do
+    fps <- asks envFPS
+    dt  <- gets stateDt
+    let ticks = div 1000 (fromIntegral fps) :: Word32
+    if dt > ticks then return 0
+                  else return $ ticks - dt
 
 processEvents :: Demo ()
 processEvents = do
-    let evPtr = nullPtr :: Ptr SDL.Event
-    val <- liftIO $ SDL.pollEvent evPtr
+    evPtr <- liftIO malloc :: Demo (Ptr SDL.Event)
+    val   <- liftIO $ SDL.pollEvent evPtr
     case val of
-      0 -> return ()
+      0 -> liftIO $ free evPtr
       _ -> do
           ev <- liftIO $ peek evPtr :: Demo SDL.Event
+          liftIO $ free evPtr
           processEvent ev
           processEvents
 
 processEvent :: SDL.Event -> Demo ()
 processEvent ev = do
+    --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show ev)
     case ev of
       (SDL.WindowEvent _ _ _ wev w h) -> do
           when (wev == SDL.windowEventResized) $
@@ -193,7 +218,6 @@ processEvent ev = do
           adjustWindow
 
       (SDL.MouseButtonEvent _ _ _ _ b st _ x y) -> do
-          liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show st)
           when (b == SDL.buttonLeft) $ do
               let pressed = (st == 1)
               modify $ \s -> s
@@ -219,7 +243,7 @@ processEvent ev = do
           env <- ask
           modify $ \s -> s
             { stateZDist =
-                let zDist' = stateZDist s + realToFrac (negate $ div y 2)
+                let zDist' = stateZDist s + ((realToFrac y :: Double) / (-2.0))
                 in  curb (envZDistClosest env) (envZDistFarthest env) zDist'
             }
           adjustWindow
@@ -231,6 +255,12 @@ processEvent ev = do
                 modify $ \s -> s
                   { stateRunning = False
                   }
+
+      (SDL.QuitEvent _ _) ->
+          modify $ \s -> s
+            { stateRunning = False
+            }
+
       _else -> return ()
     where fi = fromIntegral
 
@@ -252,7 +282,6 @@ draw = do
         xunit = GL.Vector3 1 0 0 :: GL.Vector3 GL.GLfloat
         yunit = GL.Vector3 0 1 0 :: GL.Vector3 GL.GLfloat
         zunit = GL.Vector3 0 0 1 :: GL.Vector3 GL.GLfloat
-
 
 adjustWindow :: Demo ()
 adjustWindow = do
