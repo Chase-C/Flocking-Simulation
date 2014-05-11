@@ -6,6 +6,7 @@ cabal-dev
 *.chs.h
 *.swp
 *.exe
+*.dll
 .virtualenv
 .hsenv
 .cabal-sandbox/
