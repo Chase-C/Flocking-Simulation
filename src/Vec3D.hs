@@ -30,3 +30,9 @@ vScaleTo vec             n = vScale vec (n / (vLen vec))
 
 vNorm :: Vec3D -> Vec3D
 vNorm vec = vScale vec (1.0 / (vLen vec))
+
+vAdd3 :: Vec3D -> Vec3D -> Vec3D -> Vec3D
+vAdd3 v1 v2 v3 = vAdd (vAdd v1 v2) v3
+
+vAdd4 :: Vec3D -> Vec3D -> Vec3D -> Vec3D -> Vec3D
+vAdd4 v1 v2 v3 v4 = vAdd (vAdd3 v1 v2 v3) v4
