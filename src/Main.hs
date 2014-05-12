@@ -59,7 +59,7 @@ main = do
     let width  = 640
         height = 480
 
-    withFile "log.txt" WriteMode (\h -> return ())
+    --withFile "log.txt" WriteMode (\h -> return ())
 
     withWindow width height "Flocking Simulation" $ \win -> do
         void $ SDL.glSetSwapInterval 1
@@ -72,7 +72,7 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        boids     <- makeBoids ((-5), (-5), (-5)) (5, 5, 5) 10
+        boids     <- makeBoids ((-5), (-5), (-5)) (5, 5, 5) 20
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
@@ -80,7 +80,7 @@ main = do
             zDist         = zDistClosest + ((zDistFarthest - zDistClosest) / 2)
             env = Env
               { envWindow        = win
-              , envFPS           = 30
+              , envFPS           = 60
               , envZDistClosest  = zDistClosest
               , envZDistFarthest = zDistFarthest
               , envBoidDispList  = bDispList
@@ -160,15 +160,9 @@ run = do
             sody  = stateDragStartY      state
             sodxa = stateDragStartXAngle state
             sodya = stateDragStartYAngle state
-        xPtr <- liftIO malloc :: Demo (Ptr CInt)
-        yPtr <- liftIO malloc :: Demo (Ptr CInt)
-        void $ liftIO $ SDL.getMouseState xPtr yPtr
-        x <- liftM fromIntegral $ liftIO $ peek xPtr :: Demo Int
-        y <- liftM fromIntegral $ liftIO $ peek yPtr :: Demo Int
+        (x, y) <- liftIO getMousePos
         let myrot = div (x - sodx) 2
             mxrot = div (y - sody) 2
-        liftIO $ free xPtr
-        liftIO $ free yPtr
         modify $ \s -> s
           { stateXAngle = sodxa + (fromIntegral mxrot)
           , stateYAngle = sodya + (fromIntegral myrot)

@@ -31,9 +31,9 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
 
 updateBoid :: Boid -> [Boid] -> Boid
 updateBoid (Boid pos vel tar rad) neighbors =
-    let velUpdate = vClamp (foldl (updateVelocity pos) zeroVec neighbors) 0.02
-        tarUpdate = vClamp (updateTarget pos tar) 0.02
-        newVel    = vClamp (vAdd3 vel velUpdate tarUpdate) 0.08
+    let velUpdate = vClamp (foldl (updateVelocity pos) zeroVec neighbors) 0.01
+        tarUpdate = vClamp (updateTarget pos tar) 0.01
+        newVel    = vClamp (vAdd3 vel velUpdate tarUpdate) 0.05
     in  Boid
           { bPos = vAdd pos newVel
           , bVel = newVel
