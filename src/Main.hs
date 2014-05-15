@@ -21,6 +21,8 @@ import Boid
 import Utils
 import Vec3D
 
+import qualified Octree as O
+
 --------------------------------------------------------------------------------
 
 data Env = Env
@@ -48,6 +50,7 @@ data State = State
     , stateDragStartXAngle :: !Double
     , stateDragStartYAngle :: !Double
     , stateBoids           :: ![Boid]
+    , stateOctree          :: !Octree
     }
 
 type Demo = RWST Env () State IO

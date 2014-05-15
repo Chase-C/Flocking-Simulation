@@ -6,9 +6,9 @@ zeroVec :: Vec3D
 zeroVec = Vec3D (0, 0, 0)
 
 vX, vY, vZ :: Vec3D -> Float
-vX (Vec3D x _ _) = x
-vY (Vec3D _ y _) = y
-vZ (Vec3D _ _ z) = z
+vX (Vec3D x, _, _) = x
+vY (Vec3D _, y, _) = y
+vZ (Vec3D _, _, z) = z
 
 vAdd, vSub, vCross :: Vec3D -> Vec3D -> Vec3D
 vAdd   (Vec3D (x1, y1, z1)) (Vec3D (x2, y2, z2)) = Vec3D (x1 + x2, y1 + y2, z1 + z2)
