@@ -127,3 +127,18 @@ getNearObjects :: Octree -> Vec3D -> [Boid]
 getNearObjects (Leaf _ _ objs) _ = objs
 getNearObjects node pos          = getNearObjects subtree pos
     where subtree = getSubtree node $ getOctant (center node) pos
+
+getRadiusObjects' :: Octree -> [Vec3D] -> Float -> [Boid]
+getRadiusObjects' (Leaf _ _ objs) (p:_) r = filter (\obj -> (r * r) > (vSqLen $ vSub p $ bPos obj)) objs
+getRadiusObjects' node pts r              = concat $ map (\t -> getRadiusObjects' t pts r) subtrees
+    where subtrees = map (getSubtree node) $ if r > len node
+                                               then map toEnum [0..7]
+                                               else L.nub $ map (getOctant (center node)) pts
+
+getRadiusObjects :: Octree -> Vec3D -> Float -> [Boid]
+getRadiusObjects tree pos r = getRadiusObjects' tree pts r
+    where pts     = pos:foldl (\ps off -> (vAdd pos off):(vSub pos off):ps) [] offsets
+          offsets = [v  (r,0,0),  v  ( 0,r,0), v  (0,0, r), vs (1, 1,0), vs ( 0,1,1), vs (1,0, 1),
+                     vs (1,-1,0), vs (0,1,-1), vs (1,0,-1), vs (1, 1,1), vs (-1,1,1), vs (1,1,-1), vs (1,-1,1)]
+          v       = Vec3D
+          vs pt   = vScale (v pt) r
