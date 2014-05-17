@@ -156,7 +156,7 @@ run = do
     let boids = O.flattenTree $ stateOctree state
     modify $ \s -> s {
         stateOctree = O.splitWith (O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 32) $
-                       map (\b -> updateBoid b $ O.getRadiusObjects (stateOctree state) (bPos b) 3.5) boids) ((> 8) . O.count)
+                       map (\b -> updateBoid b $ O.getRadiusObjects (stateOctree state) (bPos b) 3.0) boids) ((> 8) . O.count)
         }
 
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "3")

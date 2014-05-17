@@ -35,7 +35,7 @@ updateBoid (Boid pos vel tar rad) neighbors =
     let velUpdate = vClamp (foldl (updateVelocity pos) zeroVec neighbors) 0.01
         --tarUpdate = vClamp (updateTarget pos tar) 0.01
         bndUpdate = vClamp (updateBounds pos) 0.015
-        newVel    = vClamp (vAdd3 vel velUpdate bndUpdate) 0.05
+        newVel    = vScaleTo (vAdd3 vel velUpdate bndUpdate) 0.05
     in  Boid
           { bPos = vAdd pos newVel
           , bVel = newVel
