@@ -32,8 +32,9 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
 updateBoid :: Boid -> [Boid] -> Boid
 updateBoid (Boid pos vel tar rad) neighbors =
     let velUpdate = vClamp (foldl (updateVelocity pos) zeroVec neighbors) 0.01
-        tarUpdate = vClamp (updateTarget pos tar) 0.01
-        newVel    = vClamp (vAdd3 vel velUpdate tarUpdate) 0.05
+        --tarUpdate = vClamp (updateTarget pos tar) 0.01
+        bndUpdate = vClamp (updateBounds pos) 0.01
+        newVel    = vClamp (vAdd3 vel velUpdate bndUpdate) 0.05
     in  Boid
           { bPos = vAdd pos newVel
           , bVel = newVel
@@ -51,9 +52,11 @@ updateVelocity pos vel boid
 
 updateTarget :: Vec3D -> Vec3D -> Vec3D
 updateTarget pos tar = vSub tar pos
-    --let deltaP = vSub tar pos
-    --    len    = vLen deltaP
-    --in  vSub deltaP $ vScale deltaP $ 5.0 / len
+
+updateBounds :: Vec3D -> Vec3D
+updateBounds pos
+    | vSqLen pos > (12 * 12) = vSub zeroVec pos
+    | otherwise              = zeroVec
 
 drawBoid :: GL.DisplayList -> Boid -> IO ()
 drawBoid dl boid = GL.preservingMatrix $ do
