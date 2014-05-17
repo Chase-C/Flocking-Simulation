@@ -59,8 +59,8 @@ type Demo = RWST Env () State IO
 
 main :: IO ()
 main = do
-    let width  = 640
-        height = 480
+    let width  = 800
+        height = 600
 
     --withFile "log.txt" WriteMode (\h -> return ())
 
@@ -75,11 +75,11 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        boids     <- makeBoids ((-5), (-5), (-5)) (5, 5, 5) 200
+        boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 1000
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
-            zDistFarthest = zDistClosest + 20
+            zDistFarthest = zDistClosest + 40
             zDist         = zDistClosest + ((zDistFarthest - zDistClosest) / 2)
             env = Env
               { envWindow        = win
@@ -105,7 +105,7 @@ main = do
               , stateDragStartXAngle = 0
               , stateDragStartYAngle = 0
               , stateBoids           = boids
-              , stateOctree          = O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 16) boids
+              , stateOctree          = O.splitWith (O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 32) boids) ((> 8) . O.count)
               }
         runDemo env state
 
@@ -155,7 +155,7 @@ run = do
 
     let boids = O.flattenTree $ stateOctree state
     modify $ \s -> s {
-        stateOctree = O.splitWith (O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 16) $
+        stateOctree = O.splitWith (O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 32) $
                         --map (\b -> updateBoid b boids) boids) ((> 8) . O.count)
                         map (\b -> updateBoid b $ O.getNearObjects (stateOctree state) $ bPos b) boids) ((> 8) . O.count)
         }
@@ -295,7 +295,7 @@ adjustWindow = do
         size  = GL.Size (fromIntegral width) (fromIntegral height)
         h     = fromIntegral height / fromIntegral width :: Double
         znear = 1           :: Double
-        zfar  = 40          :: Double
+        zfar  = 80          :: Double
         xmax  = znear * 0.5 :: Double
     liftIO $ do
         GL.viewport   GL.$= (pos, size)

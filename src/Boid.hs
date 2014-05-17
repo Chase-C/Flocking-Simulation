@@ -19,21 +19,22 @@ data Boid = Boid
 
 makeBoids :: (Int, Int, Int) -> (Int, Int, Int) -> Int -> IO [Boid]
 makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
-        x <- fmap fromIntegral $ getRandom lx hx
-        y <- fmap fromIntegral $ getRandom ly hy
-        z <- fmap fromIntegral $ getRandom lz hz
+        x <- getRandom (rtf lx) (rtf hx) :: IO Float
+        y <- getRandom (rtf ly) (rtf hy) :: IO Float
+        z <- getRandom (rtf lz) (rtf hz) :: IO Float
         return $ Boid
             { bPos = Vec3D (x, y, z)
             , bVel = zeroVec
             , bTar = zeroVec
             , bRad = 0.25
             })
+    where rtf = realToFrac
 
 updateBoid :: Boid -> [Boid] -> Boid
 updateBoid (Boid pos vel tar rad) neighbors =
     let velUpdate = vClamp (foldl (updateVelocity pos) zeroVec neighbors) 0.01
         --tarUpdate = vClamp (updateTarget pos tar) 0.01
-        bndUpdate = vClamp (updateBounds pos) 0.01
+        bndUpdate = vClamp (updateBounds pos) 0.015
         newVel    = vClamp (vAdd3 vel velUpdate bndUpdate) 0.05
     in  Boid
           { bPos = vAdd pos newVel
@@ -55,7 +56,7 @@ updateTarget pos tar = vSub tar pos
 
 updateBounds :: Vec3D -> Vec3D
 updateBounds pos
-    | vSqLen pos > (12 * 12) = vSub zeroVec pos
+    | vSqLen pos > (28 * 28) = vSub zeroVec pos
     | otherwise              = zeroVec
 
 drawBoid :: GL.DisplayList -> Boid -> IO ()

@@ -11,7 +11,7 @@ import qualified Graphics.Rendering.OpenGL as GL
 
 import Vec3D
 
-getRandom :: Int -> Int -> IO Int
+getRandom :: (Random a) => a -> a -> IO a
 getRandom l u = do
     seed <- getStdGen
     let (n, s) = randomR (l, u) seed
