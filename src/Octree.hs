@@ -29,18 +29,6 @@ emptyOctree c l = Leaf c l []
 
 ---------------------------------------------------------
 
---octreeMap :: (a -> b) -> Octree a -> Octree b
---octreeMap func (Node cen len a b c d e f g h) = Node cen len j k l m n o p q
---    where j = octreeMap func a
---          k = octreeMap func b
---          l = octreeMap func c
---          m = octreeMap func d
---          n = octreeMap func e
---          o = octreeMap func f
---          p = octreeMap func g
---          q = octreeMap func h
---octreeMap func (Leaf cen len objs) = Leaf cen len $ zip (map (func . fst) objs) $ snd objs
-
 octreeFold :: (a -> Boid -> a) -> a -> Octree -> a
 octreeFold func i (Node _ _ a b c d e f g h) = octreeFold func p h
     where j = octreeFold func i a
@@ -106,7 +94,7 @@ insert node            obj = replaceSubtree node octant $ insert (getSubtree nod
     where octant = getOctant (center node) (bPos obj)
 
 insertList :: Octree -> [Boid] -> Octree
-insertList = fold insert
+insertList = foldl insert
 
 splitTree :: Octree -> Octree
 splitTree (Leaf c@(Vec3D (cx, cy, cz)) l objs) = foldl insert tree objs

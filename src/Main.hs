@@ -50,7 +50,7 @@ data State = State
     , stateDragStartXAngle :: !Double
     , stateDragStartYAngle :: !Double
     , stateBoids           :: ![Boid]
-    , stateOctree          :: !Octree
+    , stateOctree          :: !O.Octree
     }
 
 type Demo = RWST Env () State IO
@@ -105,6 +105,7 @@ main = do
               , stateDragStartXAngle = 0
               , stateDragStartYAngle = 0
               , stateBoids           = boids
+              , stateOctree          = O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 16) boids
               }
         runDemo env state
 
@@ -141,6 +142,7 @@ run :: Demo ()
 run = do
     currTime <- liftIO SDL.getTicks
     adjustWindow
+
     win <- asks envWindow
     state <- get
 
@@ -151,9 +153,9 @@ run = do
     processEvents
 
 
-    let boids = stateBoids state
+    let boids = O.flattenTree $ stateOctree state
     modify $ \s -> s {
-        stateBoids = map (\b -> updateBoid b boids) boids
+        stateOctree = O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 16) $ map (\b -> updateBoid b boids) boids
         }
 
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "3")
@@ -187,8 +189,8 @@ remainingFrameTime = do
     fps <- asks envFPS
     dt  <- gets stateDt
     let ticks = div 1000 (fromIntegral fps) :: Word32
-    if dt > ticks then return 0
-                  else return $ ticks - dt
+    if  dt > ticks then return 0
+                   else return $ ticks - dt
 
 processEvents :: Demo ()
 processEvents = do
@@ -274,7 +276,7 @@ draw = do
             GL.rotate (realToFrac xa) xunit
             GL.rotate (realToFrac ya) yunit
             GL.rotate (realToFrac za) zunit
-            mapM_ (drawBoid $ envBoidDispList env) $ stateBoids state
+            mapM_ (drawBoid $ envBoidDispList env) $ O.flattenTree $ stateOctree state
       where
         xunit = GL.Vector3 1 0 0 :: GL.Vector3 GL.GLfloat
         yunit = GL.Vector3 0 1 0 :: GL.Vector3 GL.GLfloat
