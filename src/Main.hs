@@ -152,10 +152,12 @@ run = do
         GL.flush  -- not necessary, but someone recommended it
     processEvents
 
-    let tree = stateOctree state
+    let tree         = stateOctree state
+        neighborFunc = (\b -> sortByDistance (bPos b) $ O.getRadiusObjects tree (bPos b) 3.0)
+        updateFunc   = (\b -> updateBoid b $ neighborFunc b)
+
     modify $ \s -> s {
-        stateOctree = O.splitWith (O.octreeMap (\b ->
-            updateBoid b $ O.getRadiusObjects tree (bPos b) 3.0) tree) ((> 8) . O.count)
+        stateOctree = O.splitWith (O.octreeMap updateFunc tree) ((> 8) . O.count)
         }
 
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "3")

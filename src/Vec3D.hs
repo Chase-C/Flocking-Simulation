@@ -2,6 +2,10 @@ module Vec3D where
 
 newtype Vec3D = Vec3D (Float, Float, Float) deriving (Show, Eq)
 
+instance Ord Vec3D where
+    compare v1 v2 = compare (vSqLen v1) (vSqLen v2)
+    (<=)    v1 v2 = (vSqLen v1) <= (vSqLen v2)
+
 zeroVec :: Vec3D
 zeroVec = Vec3D (0, 0, 0)
 
