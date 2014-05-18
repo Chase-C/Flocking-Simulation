@@ -3,6 +3,7 @@ module Octree where
 ---------------------------------------------------------
 
 import qualified Data.List as L
+import Data.Bits
 import Vec3D
 import Boid
 
@@ -132,17 +133,37 @@ getNearObjects (Leaf _ _ objs) _ = objs
 getNearObjects node pos          = getNearObjects subtree pos
     where subtree = getSubtree node $ getOctant (center node) pos
 
-getRadiusObjects' :: Octree -> [Vec3D] -> Float -> [Boid]
-getRadiusObjects' (Leaf _ _ objs) (p:_) r = filter (\obj -> (r * r) > (vSqLen $ vSub p $ bPos obj)) objs
-getRadiusObjects' node pts r              = concat $ map (\t -> getRadiusObjects' t pts r) subtrees
-    where subtrees = map (getSubtree node) $ if r > len node
-                                               then map toEnum [0..7]
-                                               else L.nub $ map (getOctant (center node)) pts
+-- Optimize the shit out of this
+-- Idea: Only cast 7 (max) vectors toward other octants
+--       instead of 27
+--getRadiusObjects' :: Octree -> [Vec3D] -> Float -> [Boid]
+--getRadiusObjects' (Leaf _ _ objs) (p:_) r = filter (\obj -> (r * r) > (vSqLen $ vSub p $ bPos obj)) objs
+--getRadiusObjects' node pts r              = concat $ map (\t -> getRadiusObjects' t pts r) subtrees
+--    where subtrees = map (getSubtree node) $ if r > len node
+--                                               then map toEnum [0..7]
+--                                               else L.nub $ map (getOctant (center node)) pts
+--
+--getRadiusObjects :: Octree -> Vec3D -> Float -> [Boid]
+--getRadiusObjects tree pos r = getRadiusObjects' tree pts r
+--    where pts     = pos:foldl (\ps off -> (vAdd pos off):(vSub pos off):ps) [] offsets
+--          -- Whoops, these aren't all normalized
+--          offsets = [v  (r,0,0),  v  ( 0,r,0), v  (0,0, r), vs (1, 1,0), vs ( 0,1,1), vs (1,0, 1),
+--                     vs (1,-1,0), vs (0,1,-1), vs (1,0,-1), vs (1, 1,1), vs (-1,1,1), vs (1,1,-1), vs (1,-1,1)]
+--          v       = Vec3D
+--          vs pt   = vScale (v pt) r
+
+-----------------------------------------------
+-- Testing
+-----------------------------------------------
 
 getRadiusObjects :: Octree -> Vec3D -> Float -> [Boid]
-getRadiusObjects tree pos r = getRadiusObjects' tree pts r
-    where pts     = pos:foldl (\ps off -> (vAdd pos off):(vSub pos off):ps) [] offsets
-          offsets = [v  (r,0,0),  v  ( 0,r,0), v  (0,0, r), vs (1, 1,0), vs ( 0,1,1), vs (1,0, 1),
-                     vs (1,-1,0), vs (0,1,-1), vs (1,0,-1), vs (1, 1,1), vs (-1,1,1), vs (1,1,-1), vs (1,-1,1)]
-          v       = Vec3D
-          vs pt   = vScale (v pt) r
+getRadiusObjects (Leaf _ l objs) pos r
+    | r > l     = objs
+    | otherwise = filter (\obj -> (r * r) > (vSqLen $ vSub pos $ bPos obj)) objs
+getRadiusObjects node pos r = concat $ map (\o -> getRadiusObjects (getSubtree node o) pos r) octants
+    where octants = map toEnum (if r > len node
+                                  then [x + y + z | z <- zList, y <- yList, x <- xList]
+                                  else [1..7]) :: [Octant]
+          xList   = 0 : if r > abs ((vX pos) - (vX $ center node)) then [1] else []
+          yList   = 0 : if r > abs ((vY pos) - (vY $ center node)) then [2] else []
+          zList   = 0 : if r > abs ((vZ pos) - (vZ $ center node)) then [4] else []
