@@ -29,6 +29,10 @@ emptyOctree c l = Leaf c l []
 
 ---------------------------------------------------------
 
+octreeMap :: (Boid -> Boid) -> Octree -> Octree
+octreeMap func tree = insertList (emptyOctree (center tree) (len tree)) $ map func boids
+    where boids = flattenTree tree
+
 octreeFold :: (a -> Boid -> a) -> a -> Octree -> a
 octreeFold func i (Node _ _ a b c d e f g h) = octreeFold func p h
     where j = octreeFold func i a

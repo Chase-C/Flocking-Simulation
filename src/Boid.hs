@@ -24,7 +24,7 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
         z <- getRandom (rtf lz) (rtf hz) :: IO Float
         return $ Boid
             { bPos = Vec3D (x, y, z)
-            , bVel = zeroVec
+            , bVel = vScale (Vec3D (x, y, z)) 0.001
             , bTar = zeroVec
             , bRad = 0.25
             })

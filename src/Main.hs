@@ -75,7 +75,7 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 1000
+        boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 500
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
@@ -152,11 +152,10 @@ run = do
         GL.flush  -- not necessary, but someone recommended it
     processEvents
 
-
-    let boids = O.flattenTree $ stateOctree state
+    let tree = stateOctree state
     modify $ \s -> s {
-        stateOctree = O.splitWith (O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 32) $
-                       map (\b -> updateBoid b $ O.getRadiusObjects (stateOctree state) (bPos b) 3.0) boids) ((> 8) . O.count)
+        stateOctree = O.splitWith (O.octreeMap (\b ->
+            updateBoid b $ O.getRadiusObjects tree (bPos b) 3.0) tree) ((> 8) . O.count)
         }
 
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "3")
