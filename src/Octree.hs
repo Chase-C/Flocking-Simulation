@@ -2,8 +2,11 @@ module Octree where
 
 ---------------------------------------------------------
 
-import qualified Data.List as L
+import Control.Applicative
 import Data.Bits
+
+import qualified Data.List as L
+
 import Vec3D
 import Boid
 
@@ -167,9 +170,9 @@ getRadiusObjects (Leaf _ l objs) pos r
     | otherwise = filter (\obj -> (r * r) > (vSqLen $ vSub pos $ bPos obj)) objs
 getRadiusObjects node pos r = concat $ map (\o -> getRadiusObjects (getSubtree node o) pos r) others
     where octant = getOctant (center node) pos
-          others = map toEnum (if r > len node
-                                 then [x + y + z | z <- zList, y <- yList, x <- xList]
-                                 else [0..7]) :: [Octant]
-          xList  = 0 : if r > abs ((vX pos) - (vX $ center node)) then [1] else []
-          yList  = 0 : if r > abs ((vY pos) - (vY $ center node)) then [2] else []
-          zList  = 0 : if r > abs ((vZ pos) - (vZ $ center node)) then [4] else []
+          others = if r > len node
+                     then map toEnum [0..7] :: [Octant]
+                     else [x . y . z | z <- zList, y <- yList, x <- xList] <*> [octant]
+          xList  = id : if r > abs ((vX pos) - (vX $ center node)) then [xOppOctant] else []
+          yList  = id : if r > abs ((vY pos) - (vY $ center node)) then [yOppOctant] else []
+          zList  = id : if r > abs ((vZ pos) - (vZ $ center node)) then [zOppOctant] else []

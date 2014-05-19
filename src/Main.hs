@@ -130,7 +130,7 @@ withWindow w h title f = do
         SDL.quit
       else do
         err <- SDL.getError >>= peekCString
-        withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show err)
+        withFile "error.txt" AppendMode (\h -> hPutStrLn h $ show err)
     where fi = fromIntegral
 
 --------------------------------------------------------------------------------
@@ -160,7 +160,7 @@ run = do
         stateOctree = O.splitWith (O.octreeMap updateFunc tree) ((> 8) . O.count)
         }
 
-    --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "3")
+    --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ O.prettyPrint $ stateOctree state)
 
     when (stateDragging state) $ do
         let sodx  = stateDragStartX      state
@@ -181,7 +181,6 @@ run = do
       , stateDt       = newTime - stateGameTime state
       }
 
-    --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show running)
     remainingTime <- remainingFrameTime
     liftIO $ SDL.delay remainingTime
     when (stateRunning state) run
