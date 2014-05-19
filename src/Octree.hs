@@ -156,14 +156,20 @@ getNearObjects node pos          = getNearObjects subtree pos
 -- Testing
 -----------------------------------------------
 
+xOppOctant, yOppOctant, zOppOctant :: Octant -> Octant
+xOppOctant octant = toEnum $ xor (fromEnum octant) 1
+yOppOctant octant = toEnum $ xor (fromEnum octant) 2
+zOppOctant octant = toEnum $ xor (fromEnum octant) 4
+
 getRadiusObjects :: Octree -> Vec3D -> Float -> [Boid]
 getRadiusObjects (Leaf _ l objs) pos r
     | r > l     = objs
     | otherwise = filter (\obj -> (r * r) > (vSqLen $ vSub pos $ bPos obj)) objs
-getRadiusObjects node pos r = concat $ map (\o -> getRadiusObjects (getSubtree node o) pos r) octants
-    where octants = map toEnum (if r > len node
-                                  then [x + y + z | z <- zList, y <- yList, x <- xList]
-                                  else [1..7]) :: [Octant]
-          xList   = 0 : if r > abs ((vX pos) - (vX $ center node)) then [1] else []
-          yList   = 0 : if r > abs ((vY pos) - (vY $ center node)) then [2] else []
-          zList   = 0 : if r > abs ((vZ pos) - (vZ $ center node)) then [4] else []
+getRadiusObjects node pos r = concat $ map (\o -> getRadiusObjects (getSubtree node o) pos r) others
+    where octant = getOctant (center node) pos
+          others = map toEnum (if r > len node
+                                 then [x + y + z | z <- zList, y <- yList, x <- xList]
+                                 else [0..7]) :: [Octant]
+          xList  = 0 : if r > abs ((vX pos) - (vX $ center node)) then [1] else []
+          yList  = 0 : if r > abs ((vY pos) - (vY $ center node)) then [2] else []
+          zList  = 0 : if r > abs ((vZ pos) - (vZ $ center node)) then [4] else []
