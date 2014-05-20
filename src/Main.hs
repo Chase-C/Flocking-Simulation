@@ -21,7 +21,7 @@ import Boid
 import Utils
 import Vec3D
 
-import qualified Octree as O
+import qualified KDtree as KD
 
 --------------------------------------------------------------------------------
 
@@ -50,7 +50,7 @@ data State = State
     , stateDragStartXAngle :: !Double
     , stateDragStartYAngle :: !Double
     , stateBoids           :: ![Boid]
-    , stateOctree          :: !O.Octree
+    , stateKDtree          :: !KD.KDtree
     }
 
 type Demo = RWST Env () State IO
@@ -105,7 +105,7 @@ main = do
               , stateDragStartXAngle = 0
               , stateDragStartYAngle = 0
               , stateBoids           = boids
-              , stateOctree          = O.splitWith (O.insertList (O.emptyOctree (Vec3D (0, 0, 0)) 32) boids) ((> 8) . O.count)
+              , stateKDtree          = KD.fromList boids
               }
         runDemo env state
 
@@ -152,13 +152,22 @@ run = do
         GL.flush  -- not necessary, but someone recommended it
     processEvents
 
-    let tree         = stateOctree state
-        neighborFunc = (\b -> sortByDistance (bPos b) $ O.getRadiusObjects tree (bPos b) 3.0)
+    let tree         = stateKDtree state
+        boids        = KD.toList tree
+        neighborFunc = (\b -> KD.kNearestNeighbors tree (bPos b) 7)
         updateFunc   = (\b -> updateBoid b $ neighborFunc b)
 
     modify $ \s -> s {
-        stateOctree = O.splitWith (O.octreeMap updateFunc tree) ((> 8) . O.count)
+        stateKDtree = KD.fromList $ map updateFunc boids
         }
+
+    --let tree         = stateOctree state
+    --    neighborFunc = (\b -> sortByDistance (bPos b) $ O.getRadiusObjects tree (bPos b) 3.0)
+    --    updateFunc   = (\b -> updateBoid b $ neighborFunc b)
+
+    --modify $ \s -> s {
+    --    stateOctree = O.splitWith (O.octreeMap updateFunc tree) ((> 8) . O.count)
+    --    }
 
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ O.prettyPrint $ stateOctree state)
 
@@ -277,7 +286,7 @@ draw = do
             GL.rotate (realToFrac xa) xunit
             GL.rotate (realToFrac ya) yunit
             GL.rotate (realToFrac za) zunit
-            mapM_ (drawBoid $ envBoidDispList env) $ O.flattenTree $ stateOctree state
+            mapM_ (drawBoid $ envBoidDispList env) $ KD.toList $ stateKDtree state
       where
         xunit = GL.Vector3 1 0 0 :: GL.Vector3 GL.GLfloat
         yunit = GL.Vector3 0 1 0 :: GL.Vector3 GL.GLfloat
