@@ -13,6 +13,7 @@ import Foreign.Ptr               (Ptr)
 import Foreign.Storable          (peek)
 import Data.Bits                 ((.|.))
 import Data.Word                 (Word32)
+import Data.Array.IArray
 
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.SDL           as SDL
@@ -21,7 +22,7 @@ import Boid
 import Utils
 import Vec3D
 
-import qualified KDtree as KD
+import qualified Neighborhood as N
 
 --------------------------------------------------------------------------------
 
@@ -50,7 +51,7 @@ data State = State
     , stateDragStartXAngle :: !Double
     , stateDragStartYAngle :: !Double
     , stateBoids           :: ![Boid]
-    , stateKDtree          :: !KD.KDtree
+    , stateGrid            :: !N.NeighborGrid
     }
 
 type Demo = RWST Env () State IO
@@ -75,7 +76,7 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 500
+        --boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 500
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
@@ -104,8 +105,8 @@ main = do
               , stateDragStartY      = 0
               , stateDragStartXAngle = 0
               , stateDragStartYAngle = 0
-              , stateBoids           = boids
-              , stateKDtree          = KD.fromList boids
+              , stateBoids           = []
+              , stateGrid            = N.defaultGrid 8
               }
         runDemo env state
 
@@ -152,14 +153,23 @@ run = do
         GL.flush  -- not necessary, but someone recommended it
     processEvents
 
-    let tree         = stateKDtree state
-        boids        = KD.toList tree
-        neighborFunc = (\b -> KD.kNearestNeighbors tree (bPos b) 7)
-        updateFunc   = (\b -> updateBoid b $ neighborFunc b)
+    let grid         = stateGrid state
+        pairs        = assocs grid
+        neighborFunc = (\i -> N.getNeighbors grid i)
+        updateFunc   = (\(i, b) -> (i, updateBoid b $ neighborFunc i))
 
     modify $ \s -> s {
-        stateKDtree = KD.fromList $ map updateFunc boids
+        stateGrid = grid // map updateFunc pairs
         }
+
+    --let tree         = stateKDtree state
+    --    boids        = KD.toList tree
+    --    neighborFunc = (\b -> KD.kNearestNeighbors tree (bPos b) 7)
+    --    updateFunc   = (\b -> updateBoid b $ neighborFunc b)
+
+    --modify $ \s -> s {
+    --    stateKDtree = KD.fromList $ map updateFunc boids
+    --    }
 
     --let tree         = stateOctree state
     --    neighborFunc = (\b -> sortByDistance (bPos b) $ O.getRadiusObjects tree (bPos b) 3.0)
@@ -286,7 +296,7 @@ draw = do
             GL.rotate (realToFrac xa) xunit
             GL.rotate (realToFrac ya) yunit
             GL.rotate (realToFrac za) zunit
-            mapM_ (drawBoid $ envBoidDispList env) $ KD.toList $ stateKDtree state
+            mapM_ (drawBoid $ envBoidDispList env) $ elems $ stateGrid state
       where
         xunit = GL.Vector3 1 0 0 :: GL.Vector3 GL.GLfloat
         yunit = GL.Vector3 0 1 0 :: GL.Vector3 GL.GLfloat
