@@ -44,13 +44,34 @@ updateBoid (Boid pos vel tar rad) neighbors =
           , bRad = rad
           }
 
+updateBoidRadius :: Boid -> [(Boid, Float)] -> Boid
+updateBoidRadius (Boid pos vel tar rad) neighbors =
+    let velUpdate = vClamp (foldl (updateVelocityRadius pos) zeroVec neighbors) 0.01
+        --tarUpdate = vClamp (updateTarget pos tar) 0.01
+        bndUpdate = vClamp (updateBounds pos) 0.015
+        newVel    = vScaleTo (vAdd3 vel velUpdate bndUpdate) 0.05
+    in  Boid
+          { bPos = vAdd pos newVel
+          , bVel = newVel
+          , bTar = zeroVec
+          , bRad = rad
+          }
+
 updateVelocity :: Vec3D -> Vec3D -> Boid -> Vec3D
 updateVelocity pos vel boid
     | pos == bPos boid = vel
     | otherwise        =
         let deltaP = vSub (bPos boid) pos
             len    = vLen deltaP
-        in  vSub (vAdd3 vel deltaP $ vScale (bVel boid) (0.1 / len)) $ vScale deltaP $ 1.2 / len
+        in  vSub (vAdd3 vel deltaP $ vScale (bVel boid) (0.1 / len)) $ vScale deltaP $ 2.5 / len
+
+updateVelocityRadius :: Vec3D -> Vec3D -> (Boid, Float) -> Vec3D
+updateVelocityRadius pos vel (boid, radius)
+    | pos == bPos boid = vel
+    | otherwise        =
+        let deltaP = vSub (bPos boid) pos
+            len    = radius
+        in  vSub (vAdd3 vel deltaP $ vScale (bVel boid) (0.1 / len)) $ vScale deltaP $ 1.5 / len
 
 updateTarget :: Vec3D -> Vec3D -> Vec3D
 updateTarget pos tar = vSub tar pos

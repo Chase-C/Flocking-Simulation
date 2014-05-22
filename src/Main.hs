@@ -13,7 +13,8 @@ import Foreign.Ptr               (Ptr)
 import Foreign.Storable          (peek)
 import Data.Bits                 ((.|.))
 import Data.Word                 (Word32)
-import Data.Array.IArray
+import Data.Array.IArray         ((//), assocs, elems)
+import Data.List                 (sortBy)
 
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.SDL           as SDL
@@ -22,7 +23,7 @@ import Boid
 import Utils
 import Vec3D
 
-import qualified Neighborhood as N
+import qualified Octree as O
 
 --------------------------------------------------------------------------------
 
@@ -51,7 +52,7 @@ data State = State
     , stateDragStartXAngle :: !Double
     , stateDragStartYAngle :: !Double
     , stateBoids           :: ![Boid]
-    , stateGrid            :: !N.NeighborGrid
+    , stateOctree          :: !O.Octree
     }
 
 type Demo = RWST Env () State IO
@@ -76,7 +77,7 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        --boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 500
+        boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 500
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
@@ -106,7 +107,7 @@ main = do
               , stateDragStartXAngle = 0
               , stateDragStartYAngle = 0
               , stateBoids           = []
-              , stateGrid            = N.defaultGrid 8
+              , stateOctree          = O.splitWith (O.fromList boids (Vec3D (0, 0, 0)) 64) ((> 8) . O.count)
               }
         runDemo env state
 
@@ -153,14 +154,15 @@ run = do
         GL.flush  -- not necessary, but someone recommended it
     processEvents
 
-    let grid         = stateGrid state
-        pairs        = assocs grid
-        neighborFunc = (\i -> N.getNeighbors grid i)
-        updateFunc   = (\(i, b) -> (i, updateBoid b $ neighborFunc i))
+    --let grid         = stateGrid state
+    --    pairs        = assocs grid
+    --    neighborFunc = N.getNeighbors grid
+    --    sortFunc     = sortBy (\a b -> (bPos a) `compare` (bPos b))
+    --    updateFunc   = (\(i, b) -> (i, updateBoid b $ take 7 $ sortFunc $ neighborFunc i))
 
-    modify $ \s -> s {
-        stateGrid = grid // map updateFunc pairs
-        }
+    --modify $ \s -> s {
+    --    stateGrid = grid // map updateFunc pairs
+    --    }
 
     --let tree         = stateKDtree state
     --    boids        = KD.toList tree
@@ -171,13 +173,15 @@ run = do
     --    stateKDtree = KD.fromList $ map updateFunc boids
     --    }
 
-    --let tree         = stateOctree state
-    --    neighborFunc = (\b -> sortByDistance (bPos b) $ O.getRadiusObjects tree (bPos b) 3.0)
-    --    updateFunc   = (\b -> updateBoid b $ neighborFunc b)
+    let tree         = stateOctree state
+        --neighborFunc = (\b -> sortByDistance (bPos b) $ O.getRadiusObjects tree (bPos b) 3.0)
+        --updateFunc   = (\b -> updateBoid b $ neighborFunc b)
+        neighborFunc = (\b -> O.kNearestNeighbors tree (bPos b) 7 2.5)
+        updateFunc   = (\b -> updateBoidRadius b $ neighborFunc b)
 
-    --modify $ \s -> s {
-    --    stateOctree = O.splitWith (O.octreeMap updateFunc tree) ((> 8) . O.count)
-    --    }
+    modify $ \s -> s {
+        stateOctree = O.splitWith (O.octreeMap updateFunc tree) ((> 8) . O.count)
+        }
 
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ O.prettyPrint $ stateOctree state)
 
@@ -296,7 +300,7 @@ draw = do
             GL.rotate (realToFrac xa) xunit
             GL.rotate (realToFrac ya) yunit
             GL.rotate (realToFrac za) zunit
-            mapM_ (drawBoid $ envBoidDispList env) $ elems $ stateGrid state
+            mapM_ (drawBoid $ envBoidDispList env) $ O.flattenTree $ stateOctree state
       where
         xunit = GL.Vector3 1 0 0 :: GL.Vector3 GL.GLfloat
         yunit = GL.Vector3 0 1 0 :: GL.Vector3 GL.GLfloat
