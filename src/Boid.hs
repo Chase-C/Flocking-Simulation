@@ -81,9 +81,9 @@ updateBounds pos
     | vSqLen pos > (28 * 28) = vSub zeroVec pos
     | otherwise              = zeroVec
 
-sortByDistance :: Vec3D -> [Boid] -> [Boid]
-sortByDistance pos = sortBy sortFunc
-    where sortFunc = (\a b -> compare (vSub pos $ bPos a) (vSub pos $ bPos b))
+--sortByDistance :: Vec3D -> [Boid] -> [Boid]
+--sortByDistance pos = sortBy sortFunc
+--    where sortFunc = (\a b -> compare (vSub pos $ bPos a) (vSub pos $ bPos b))
 
 drawBoid :: GL.DisplayList -> Boid -> IO ()
 drawBoid dl boid = GL.preservingMatrix $ do

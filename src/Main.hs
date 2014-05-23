@@ -294,13 +294,14 @@ draw = do
     let xa = stateXAngle state
         ya = stateYAngle state
         za = stateZAngle state
+        dispList = envBoidDispList env
     liftIO $ do
         GL.clear [GL.ColorBuffer, GL.DepthBuffer]
         GL.preservingMatrix $ do
             GL.rotate (realToFrac xa) xunit
             GL.rotate (realToFrac ya) yunit
             GL.rotate (realToFrac za) zunit
-            mapM_ (drawBoid $ envBoidDispList env) $ O.flattenTree $ stateOctree state
+            O.octreeMapM_ (drawBoid $ dispList) $ stateOctree state
       where
         xunit = GL.Vector3 1 0 0 :: GL.Vector3 GL.GLfloat
         yunit = GL.Vector3 0 1 0 :: GL.Vector3 GL.GLfloat
