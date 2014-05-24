@@ -78,7 +78,7 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        boids     <- makeBoids ((-30), (-30), (-30)) (30, 30, 30) 5000
+        boids     <- makeBoids ((-12), (-12), (-12)) (12, 12, 12) 600
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
@@ -108,7 +108,7 @@ main = do
               , stateDragStartXAngle = 0
               , stateDragStartYAngle = 0
               , stateBoids           = []
-              , stateOctree          = O.splitWith (O.fromList boids (Vec3D (0, 0, 0)) 96) ((> 8) . O.count)
+              , stateOctree          = O.splitWith (O.fromList boids (Vec3D (0, 0, 0)) 32) ((> 8) . O.count)
               }
         runDemo env state
 
@@ -178,7 +178,7 @@ run = do
         cen          = O.center tree
         len          = O.len tree
         boids        = O.flattenTree tree
-        neighborFunc = (\b -> O.kNearestNeighbors tree (bPos b) 7 2.5)
+        neighborFunc = (\b -> O.kNearestNeighbors tree (bPos b) 7 (bRad b))
         updateFunc   = (\b -> updateBoidRadius b $ neighborFunc b)
 
     modify $ \s -> s {

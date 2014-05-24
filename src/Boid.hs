@@ -18,11 +18,12 @@ import Utils
 --------------------------------------------------------------------------------
 
 data Boid = Boid
-    { bPos :: !Vec3D
-    , bVel :: !Vec3D
-    , bTar :: !Vec3D
-    , bRad :: !Float
-    } deriving (Show, Eq, Generic)
+              { bPos  :: !Vec3D
+              , bVel  :: !Vec3D
+              , bTar  :: !Vec3D
+              , bRad  :: !Float
+              , bPred :: !Bool
+              } deriving (Show, Eq, Generic)
 
 instance NFData Boid where
     rnf = genericRnf
@@ -33,37 +34,40 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
         y <- getRandom (rtf ly) (rtf hy) :: IO Float
         z <- getRandom (rtf lz) (rtf hz) :: IO Float
         return $ Boid
-            { bPos = Vec3D (x, y, z)
-            , bVel = vScale (Vec3D (x, y, z)) 0.001
-            , bTar = zeroVec
-            , bRad = 0.25
+            { bPos  = Vec3D (x, y, z)
+            , bVel  = vScale (Vec3D (x, y, z)) 0.001
+            , bTar  = zeroVec
+            , bRad  = 2.5
+            , bPred = False
             })
     where rtf = realToFrac
 
 updateBoid :: Boid -> [Boid] -> Boid
-updateBoid (Boid pos vel tar rad) neighbors =
+updateBoid (Boid pos vel tar rad pred) neighbors =
     let velUpdate = vClamp (foldl (updateVelocity pos) zeroVec neighbors) 0.01
         --tarUpdate = vClamp (updateTarget pos tar) 0.01
         bndUpdate = vClamp (updateBounds pos) 0.015
         newVel    = vScaleTo (vAdd3 vel velUpdate bndUpdate) 0.05
     in  Boid
-          { bPos = vAdd pos newVel
-          , bVel = newVel
-          , bTar = zeroVec
-          , bRad = rad
+          { bPos  = vAdd pos newVel
+          , bVel  = newVel
+          , bTar  = zeroVec
+          , bRad  = rad
+          , bPred = pred
           }
 
 updateBoidRadius :: Boid -> [(Boid, Float)] -> Boid
-updateBoidRadius (Boid pos vel tar rad) neighbors =
+updateBoidRadius (Boid pos vel tar rad pred) neighbors =
     let velUpdate = vClamp (foldl (updateVelocityRadius pos) zeroVec neighbors) 0.01
         --tarUpdate = vClamp (updateTarget pos tar) 0.01
         bndUpdate = vClamp (updateBounds pos) 0.015
         newVel    = vScaleTo (vAdd3 vel velUpdate bndUpdate) 0.05
     in  Boid
-          { bPos = vAdd pos newVel
-          , bVel = newVel
-          , bTar = zeroVec
-          , bRad = rad
+          { bPos  = vAdd pos newVel
+          , bVel  = newVel
+          , bTar  = zeroVec
+          , bRad  = rad
+          , bPred = pred
           }
 
 updateVelocity :: Vec3D -> Vec3D -> Boid -> Vec3D
@@ -87,8 +91,9 @@ updateTarget pos tar = vSub tar pos
 
 updateBounds :: Vec3D -> Vec3D
 updateBounds pos
-    | vSqLen pos > (28 * 28) = vSub zeroVec pos
-    | otherwise              = zeroVec
+    | len > 14  = vScale (vSub zeroVec pos) (1 / len)
+    | otherwise = zeroVec
+    where len = vLen pos
 
 --sortByDistance :: Vec3D -> [Boid] -> [Boid]
 --sortByDistance pos = sortBy sortFunc
