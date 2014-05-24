@@ -1,6 +1,14 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Vec3D where
 
-newtype Vec3D = Vec3D (Float, Float, Float) deriving (Show, Eq)
+import Control.DeepSeq.Generics
+import GHC.Generics
+
+newtype Vec3D = Vec3D (Float, Float, Float) deriving (Show, Eq, Generic)
+
+instance NFData Vec3D where
+    rnf = genericRnf
 
 zeroVec :: Vec3D
 zeroVec = Vec3D (0, 0, 0)

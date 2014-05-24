@@ -1,5 +1,5 @@
 CC		= ghc
-FLAGS	= -O2 -Wall -odir obj -hidir obj
+FLAGS	= -O2 -Wall -threaded -feager-blackholing -rtsopts -odir obj -hidir obj
 SRCDIR	= src
 FILES	= Main.hs Boid.hs Octree.hs Utils.hs Vec3D.hs
 SOURCES	= $(FILES:%.hs=${SRCDIR}/%.hs)

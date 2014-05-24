@@ -3,18 +3,19 @@ module Main (main) where
 --------------------------------------------------------------------------------
 
 import System.IO
-import Control.Concurrent.STM    (TQueue, atomically, newTQueueIO, tryReadTQueue, writeTQueue)
-import Control.Monad             (unless, when, void)
-import Control.Monad.RWS.Strict  (RWST, ask, asks, evalRWST, get, gets, modify, put, liftIO, liftM)
-import Foreign.C.String          (CString, newCString, peekCString)
-import Foreign.C.Types           (CInt)
-import Foreign.Marshal.Alloc     (malloc, free)
-import Foreign.Ptr               (Ptr)
-import Foreign.Storable          (peek)
-import Data.Bits                 ((.|.))
-import Data.Word                 (Word32)
-import Data.Array.IArray         ((//), assocs, elems)
-import Data.List                 (sortBy)
+import Control.Concurrent.STM   (TQueue, atomically, newTQueueIO, tryReadTQueue, writeTQueue)
+import Control.Monad            (unless, when, void)
+import Control.Monad.Par        (Par, runPar, parMap)
+import Control.Monad.RWS.Strict (RWST, ask, asks, evalRWST, get, gets, modify, put, liftIO, liftM)
+import Foreign.C.String         (CString, newCString, peekCString)
+import Foreign.C.Types          (CInt)
+import Foreign.Marshal.Alloc    (malloc, free)
+import Foreign.Ptr              (Ptr)
+import Foreign.Storable         (peek)
+import Data.Bits                ((.|.))
+import Data.Word                (Word32)
+import Data.Array.IArray        ((//), assocs, elems)
+import Data.List                (sortBy)
 
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.SDL           as SDL
@@ -77,11 +78,11 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        boids     <- makeBoids ((-20), (-20), (-20)) (20, 20, 20) 500
+        boids     <- makeBoids ((-30), (-30), (-30)) (30, 30, 30) 5000
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
-            zDistFarthest = zDistClosest + 40
+            zDistFarthest = zDistClosest + 80
             zDist         = zDistClosest + ((zDistFarthest - zDistClosest) / 2)
             env = Env
               { envWindow        = win
@@ -107,7 +108,7 @@ main = do
               , stateDragStartXAngle = 0
               , stateDragStartYAngle = 0
               , stateBoids           = []
-              , stateOctree          = O.splitWith (O.fromList boids (Vec3D (0, 0, 0)) 64) ((> 8) . O.count)
+              , stateOctree          = O.splitWith (O.fromList boids (Vec3D (0, 0, 0)) 96) ((> 8) . O.count)
               }
         runDemo env state
 
@@ -174,13 +175,14 @@ run = do
     --    }
 
     let tree         = stateOctree state
-        --neighborFunc = (\b -> sortByDistance (bPos b) $ O.getRadiusObjects tree (bPos b) 3.0)
-        --updateFunc   = (\b -> updateBoid b $ neighborFunc b)
+        cen          = O.center tree
+        len          = O.len tree
+        boids        = O.flattenTree tree
         neighborFunc = (\b -> O.kNearestNeighbors tree (bPos b) 7 2.5)
         updateFunc   = (\b -> updateBoidRadius b $ neighborFunc b)
 
     modify $ \s -> s {
-        stateOctree = O.splitWith (O.octreeMap updateFunc tree) ((> 8) . O.count)
+        stateOctree = O.splitWith (O.fromList (runPar $ parMap updateFunc boids) cen len) ((> 8) . O.count)
         }
 
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ O.prettyPrint $ stateOctree state)
@@ -318,7 +320,7 @@ adjustWindow = do
         size  = GL.Size (fromIntegral width) (fromIntegral height)
         h     = fromIntegral height / fromIntegral width :: Double
         znear = 1           :: Double
-        zfar  = 80          :: Double
+        zfar  = 120         :: Double
         xmax  = znear * 0.5 :: Double
     liftIO $ do
         GL.viewport   GL.$= (pos, size)

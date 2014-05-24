@@ -1,9 +1,15 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Boid where
 
 --------------------------------------------------------------------------------
 
 import Data.List
 import Control.Monad (forM)
+import Control.DeepSeq
+import Control.DeepSeq.Generics (genericRnf)
+import GHC.Generics
+
 import qualified Graphics.Rendering.OpenGL as GL
 
 import Vec3D
@@ -16,7 +22,10 @@ data Boid = Boid
     , bVel :: !Vec3D
     , bTar :: !Vec3D
     , bRad :: !Float
-    } deriving (Show, Eq)
+    } deriving (Show, Eq, Generic)
+
+instance NFData Boid where
+    rnf = genericRnf
 
 makeBoids :: (Int, Int, Int) -> (Int, Int, Int) -> Int -> IO [Boid]
 makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
