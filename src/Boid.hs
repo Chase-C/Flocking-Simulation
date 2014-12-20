@@ -91,7 +91,7 @@ updateTarget pos tar = vSub tar pos
 
 updateBounds :: Vec3D -> Vec3D
 updateBounds pos
-    | len > 14  = vScale (vSub zeroVec pos) (1 / len)
+    | len > 28  = vScale (vSub zeroVec pos) (1 / len)
     | otherwise = zeroVec
     where len = vLen pos
 

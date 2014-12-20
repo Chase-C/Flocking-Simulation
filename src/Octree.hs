@@ -18,7 +18,7 @@ data Octree = Node
                   , count  :: Int
                   , ftr, ftl, fbr, fbl, btr, btl, bbr, bbl :: Octree
                   } -- front, back, top, bottom, right, left
-              | Leaf
+            | Leaf
                   { center  :: Vec3D
                   , len     :: Float
                   , count   :: Int
@@ -64,7 +64,7 @@ octreeFold func i (Node _ _ _ a b c d e f g h) = octreeFold func p h
           n = octreeFold func m e
           o = octreeFold func n f
           p = octreeFold func o g
-octreeFold func i (Leaf _ _ _ objs) = foldl (\acc -> func acc) i objs
+octreeFold func i (Leaf _ _ _ objs) = foldl func i objs
 
 ---------------------------------------------------------
 
@@ -110,7 +110,7 @@ replaceSubtree t@(Node cen l cnt a b c d e f g h) octant subtree =
 replaceSubtree tree _ _ = tree
 
 flattenTree :: Octree -> [Boid]
-flattenTree tree = octreeFold (\xs obj -> obj:xs) [] tree
+flattenTree = octreeFold (flip (:)) []
 
 insert :: Octree -> Boid -> Octree
 insert (Leaf cen l cnt xs) obj = Leaf cen l (cnt + 1) $ obj:xs
@@ -182,7 +182,7 @@ inBounds tree pos rad = lX && lY && lZ && uX && uY && uZ
 -- Note: The last subtree in the list is always the the one containing the point
 {-# INLINE intersectingSubtrees #-}
 intersectingSubtrees :: Octree -> Vec3D -> Float -> [Octree]
-intersectingSubtrees l@(Leaf _ _ _ _) _ _ = return l
+intersectingSubtrees l@(Leaf {}) _ _ = return l
 intersectingSubtrees node p@(Vec3D (px, py, pz)) rad = map (getSubtree node) octants
     where octant  = getOctant c p
           octants = if rad > abs (pz - cz) then foldr (\o zs -> (zOppOctant o):o:zs) [] tmpY else tmpY

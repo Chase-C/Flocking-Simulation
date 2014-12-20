@@ -62,8 +62,8 @@ type Demo = RWST Env () State IO
 
 main :: IO ()
 main = do
-    let width  = 800
-        height = 600
+    let width  = 1200
+        height = 800
 
     --withFile "log.txt" WriteMode (\h -> return ())
 
@@ -78,7 +78,7 @@ main = do
         GL.clearColor GL.$= GL.Color4 0.05 0.05 0.05 1
         GL.normalize  GL.$= GL.Enabled
 
-        boids     <- makeBoids ((-12), (-12), (-12)) (12, 12, 12) 600
+        boids     <- makeBoids (-32, -32, -32) (32, 32, 32) 8000
         bDispList <- boidDisplayList
 
         let zDistClosest  = 10
@@ -121,11 +121,11 @@ main = do
 withWindow :: Int -> Int -> String -> (SDL.Window -> IO ()) -> IO ()
 withWindow w h title f = do
     --withFile "log.txt" AppendMode (\h -> hPutStrLn h $ "1")
-    i <- SDL.init (SDL.initFlagVideo .|. SDL.initFlagEvents .|. SDL.initFlagTimer)
+    i <- SDL.init (SDL.SDL_INIT_VIDEO .|. SDL.SDL_INIT_EVENTS .|. SDL.SDL_INIT_TIMER)
     if i == 0
       then do
         cstr <- newCString title
-        win  <- SDL.createWindow cstr 100 100 (fi w) (fi h) (SDL.windowFlagOpenGL)
+        win  <- SDL.createWindow cstr 100 100 (fi w) (fi h) SDL.SDL_WINDOW_OPENGL
         con  <- SDL.glCreateContext win
         f win
         SDL.glDeleteContext con
@@ -196,8 +196,8 @@ run = do
         let myrot = div (x - sodx) 2
             mxrot = div (y - sody) 2
         modify $ \s -> s
-          { stateXAngle = sodxa + (fromIntegral mxrot)
-          , stateYAngle = sodya + (fromIntegral myrot)
+          { stateXAngle = sodxa + fromIntegral mxrot
+          , stateYAngle = sodya + fromIntegral myrot
           }
 
     newTime <- liftIO SDL.getTicks
@@ -235,7 +235,7 @@ processEvent ev = do
     --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show ev)
     case ev of
       (SDL.WindowEvent _ _ _ wev w h) -> do
-          when (wev == SDL.windowEventResized) $
+          when (wev == SDL.SDL_WINDOWEVENT_RESIZED) $
             modify $ \s -> s
               { stateWindowWidth  = fi w
               , stateWindowHeight = fi h
@@ -243,7 +243,7 @@ processEvent ev = do
           adjustWindow
 
       (SDL.MouseButtonEvent _ _ _ _ b st _ x y) -> do
-          when (b == SDL.buttonLeft) $ do
+          when (b == SDL.SDL_BUTTON_LEFT) $ do
               let pressed = (st == 1)
               modify $ \s -> s
                 { stateMouseDown = pressed
@@ -274,9 +274,9 @@ processEvent ev = do
           adjustWindow
 
       (SDL.KeyboardEvent t _ _ _ x (SDL.Keysym k _ _)) ->
-          when (t == SDL.eventTypeKeyUp) $ do
+          when (t == SDL.SDL_KEYUP) $ do
             -- Q, Esc: exit
-            when (k == SDL.scancodeQ || k == SDL.scancodeEscape) $
+            when (k == SDL.SDL_SCANCODE_Q || k == SDL.SDL_SCANCODE_ESCAPE) $
                 modify $ \s -> s
                   { stateRunning = False
                   }
