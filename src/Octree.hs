@@ -7,19 +7,19 @@ import Data.Bits
 
 import qualified Data.List as L
 
-import Vec3D
+import Linear
 import Boid
 
 ---------------------------------------------------------
 
 data Octree = Node
-                  { center :: Vec3D
+                  { center :: V3 Float
                   , len    :: Float
                   , count  :: Int
                   , ftr, ftl, fbr, fbl, btr, btl, bbr, bbl :: Octree
                   } -- front, back, top, bottom, right, left
             | Leaf
-                  { center  :: Vec3D
+                  { center  :: V3 Float
                   , len     :: Float
                   , count   :: Int
                   , objects :: [Boid]
@@ -30,11 +30,22 @@ data Octant = FTR | FTL | FBR | FBL | BTR | BTL | BBR | BBL deriving (Show, Eq, 
 
 ---------------------------------------------------------
 
-emptyOctree :: Vec3D -> Float -> Octree
+emptyOctree :: V3 Float -> Float -> Octree
 emptyOctree c l = Leaf c l 0 []
 
-fromList :: [Boid] -> Vec3D -> Float -> Octree
+fromList :: [Boid] -> V3 Float -> Float -> Octree
 fromList boids c l = foldl insert (emptyOctree c l) boids
+
+{-# INLINE vSqLen #-}
+vSqLen :: (Floating a, Eq a) => V3 a -> a
+vSqLen (V3 x y z) = (x * x) + (y * y) + (z * z)
+
+{-# INLINE vDist #-}
+vDist :: (Floating a, Eq a) => V3 a -> V3 a -> a
+vDist (V3 x1 y1 z1) (V3 x2 y2 z2) = sqrt $ (x * x) + (y * y) + (z * z)
+    where x = x2 - x1
+          y = y2 - y1
+          z = z2 - z1
 
 ---------------------------------------------------------
 
@@ -71,16 +82,16 @@ octreeFold func i (Leaf _ _ _ objs) = foldl func i objs
 prettyPrint :: Octree -> String
 prettyPrint (Node cen l cnt a b c d e f g h) = "Node {\n\tcenter: " ++ (show cen) ++ "\n\tlength: " ++ (show l) ++
     "\n\tcount: " ++ (show cnt) ++ "\n" ++ (concat $ L.intersperse "\n" $ map prettyPrint [a, b, c, d, e, f, g, h]) ++ "\n}"
-prettyPrint (Leaf cen l cnt objs) = "Leaf {\n\tcenter: " ++ (show cen) ++ "\n\tlength: " ++ (show l) ++ 
+prettyPrint (Leaf cen l cnt objs) = "Leaf {\n\tcenter: " ++ (show cen) ++ "\n\tlength: " ++ (show l) ++
     "\n\tcount: " ++ (show cnt) ++ "\n" ++ (concat $ L.intersperse "\n\t" $ map show objs) ++ "\n}"
 
 ---------------------------------------------------------
 
-getOctant :: Vec3D -> Vec3D -> Octant
-getOctant cen pos = toEnum $ (fromEnum right) + (2 * fromEnum top) + (4 * fromEnum front)
-    where front = vZ pos < vZ cen
-          top   = vY pos < vY cen
-          right = vX pos < vX cen
+getOctant :: V3 Float -> V3 Float -> Octant
+getOctant (V3 cx cy cz) (V3 px py pz) = toEnum $ (fromEnum right) + (2 * fromEnum top) + (4 * fromEnum front)
+    where front = pz < cz
+          top   = py < cy
+          right = px < cx
 
 getSubtree :: Octree -> Octant -> Octree
 getSubtree (Node _ _ _ a b c d e f g h) octant =
@@ -101,7 +112,7 @@ replaceSubtree t@(Node cen l cnt a b c d e f g h) octant subtree =
       FTR -> Node cen l nCnt subtree b c d e f g h
       FTL -> Node cen l nCnt a subtree c d e f g h
       FBR -> Node cen l nCnt a b subtree d e f g h
-      FBL -> Node cen l nCnt a b c subtree e f g h                                
+      FBL -> Node cen l nCnt a b c subtree e f g h
       BTR -> Node cen l nCnt a b c d subtree f g h
       BTL -> Node cen l nCnt a b c d e subtree g h
       BBR -> Node cen l nCnt a b c d e f subtree h
@@ -121,7 +132,7 @@ insertList :: Octree -> [Boid] -> Octree
 insertList = foldl insert
 
 splitTree :: Octree -> Octree
-splitTree (Leaf c@(Vec3D (cx, cy, cz)) l cnt objs) = foldl insert tree objs
+splitTree (Leaf c@(V3 cx cy cz) l cnt objs) = foldl insert tree objs
     where tree = Node
                    { center = c
                    , len    = l
@@ -131,7 +142,7 @@ splitTree (Leaf c@(Vec3D (cx, cy, cz)) l cnt objs) = foldl insert tree objs
                    , btr = et rx ty bz, btl = et lx ty bz
                    , bbr = et rx by bz, bbl = et lx by bz
                    }
-          et x y z = emptyOctree (Vec3D (x, y, z)) hl
+          et x y z = emptyOctree (V3 x y z) hl
           hl       = l / 2
           rx       = cx + hl
           lx       = cx - hl
@@ -144,11 +155,11 @@ splitTree tree = tree
 splitWith :: Octree -> (Octree -> Bool) -> Octree
 splitWith (Node cen len cnt i j k l m n o p) f = Node cen len cnt (s i) (s j) (s k) (s l) (s m) (s n) (s o) (s p)
     where s tree = splitWith tree f
-splitWith tree func 
+splitWith tree func
     | func tree = splitWith (splitTree tree) func
     | otherwise = tree
 
-getNearObjects :: Octree -> Vec3D -> [Boid]
+getNearObjects :: Octree -> V3 Float -> [Boid]
 getNearObjects (Leaf _ _ _ objs) _ = objs
 getNearObjects node pos            = getNearObjects subtree pos
     where subtree = getSubtree node $ getOctant (center node) pos
@@ -158,18 +169,18 @@ xOppOctant octant = toEnum $ xor (fromEnum octant) 1
 yOppOctant octant = toEnum $ xor (fromEnum octant) 2
 zOppOctant octant = toEnum $ xor (fromEnum octant) 4
 
-getRadiusObjects :: Octree -> Vec3D -> Float -> [Boid]
+getRadiusObjects :: Octree -> V3 Float -> Float -> [Boid]
 getRadiusObjects (Leaf _ l _ objs) pos r
     | r > l     = objs
-    | otherwise = filter (\obj -> (r * r) > (vSqLen $ vSub pos $ bPos obj)) objs
+    | otherwise = filter (\obj -> (r * r) > (vSqLen $ pos - bPos obj)) objs
 getRadiusObjects node pos r = concat . (map (\t -> getRadiusObjects t pos r)) $ intersectingSubtrees node pos r
 
 -- Return True iff the sphere around the given position exceeds the bounds of
 -- the given Octree.
 {-# INLINE inBounds #-}
-inBounds :: Octree -> Vec3D -> Float -> Bool
+inBounds :: Octree -> V3 Float -> Float -> Bool
 inBounds tree pos rad = lX && lY && lZ && uX && uY && uZ
-    where Vec3D (x, y, z) = vSub pos $ center tree
+    where V3 x y z = pos - center tree
           hl = len tree / 2
           lX = -hl < x - rad
           lY = -hl < y - rad
@@ -181,16 +192,16 @@ inBounds tree pos rad = lX && lY && lZ && uX && uY && uZ
 -- Return a list of the subtrees intersecting with the given bounding sphere
 -- Note: The last subtree in the list is always the the one containing the point
 {-# INLINE intersectingSubtrees #-}
-intersectingSubtrees :: Octree -> Vec3D -> Float -> [Octree]
+intersectingSubtrees :: Octree -> V3 Float -> Float -> [Octree]
 intersectingSubtrees l@(Leaf {}) _ _ = return l
-intersectingSubtrees node p@(Vec3D (px, py, pz)) rad = map (getSubtree node) octants
+intersectingSubtrees node p@(V3 px py pz) rad = map (getSubtree node) octants
     where octant  = getOctant c p
           octants = if rad > abs (pz - cz) then foldr (\o zs -> (zOppOctant o):o:zs) [] tmpY else tmpY
           tmpY    = if rad > abs (py - cy) then foldr (\o ys -> (yOppOctant o):o:ys) [] tmpX else tmpX
           tmpX    = if rad > abs (px - cx) then (xOppOctant octant):[octant] else [octant]
-          c@(Vec3D (cx, cy, cz)) = center node
+          c@(V3 cx cy cz) = center node
 
-kNearestNeighbors :: Octree -> Vec3D -> Int -> Float -> [(Boid, Float)]
+kNearestNeighbors :: Octree -> V3 Float -> Int -> Float -> [(Boid, Float)]
 kNearestNeighbors (Leaf _ _ _ objs) pos k maxR =
     take k $ L.sortBy sortByDist $ filter filtFunc $ map (getObjDist pos) objs
     where filtFunc (_, rad)        = rad < maxR
@@ -202,7 +213,7 @@ kNearestNeighbors node pos k maxR
           topR    = if length nearest >= k then snd $ last nearest else maxR
 
 {-# INLINE getOtherNeighbors #-}
-getOtherNeighbors :: Octree -> Vec3D -> Int -> Float -> [[(Boid, Float)]]
+getOtherNeighbors :: Octree -> V3 Float -> Int -> Float -> [[(Boid, Float)]]
 getOtherNeighbors tree pos k rad =
     map (\t -> kNearestNeighbors t pos k rad) $ init $ intersectingSubtrees tree pos rad
 
@@ -216,7 +227,7 @@ combineNeighbors (x@(_, rx):xs) (y@(_, ry):ys) =
       else x : combineNeighbors xs (y:ys)
 
 {-# INLINE getObjDist #-}
-getObjDist :: Vec3D -> Boid -> (Boid, Float)
+getObjDist :: V3 Float -> Boid -> (Boid, Float)
 getObjDist pos obj = (obj, vDist (bPos obj) pos)
 
 {-# INLINE sortByDist #-}

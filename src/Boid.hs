@@ -6,27 +6,25 @@ module Boid where
 
 import Data.List
 import Control.Monad (forM)
-import Control.DeepSeq
-import Control.DeepSeq.Generics (genericRnf)
-import GHC.Generics
+--import Control.DeepSeq
+--import Control.DeepSeq.Generics (genericRnf)
+--import GHC.Generics
 
-import qualified Graphics.Rendering.OpenGL as GL
-
-import Vec3D
+import Linear
 import Utils
 
 --------------------------------------------------------------------------------
 
 data Boid = Boid
-              { bPos  :: !Vec3D
-              , bVel  :: !Vec3D
-              , bTar  :: !Vec3D
+              { bPos  :: V3 Float
+              , bVel  :: V3 Float
+              , bTar  :: V3 Float
               , bRad  :: !Float
               , bPred :: !Bool
-              } deriving (Show, Eq, Generic)
+              } deriving (Show, Eq)
 
-instance NFData Boid where
-    rnf = genericRnf
+--instance NFData Boid where
+--    rnf = genericRnf
 
 makeBoids :: (Int, Int, Int) -> (Int, Int, Int) -> Int -> IO [Boid]
 makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
@@ -34,9 +32,9 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
         y <- getRandom (rtf ly) (rtf hy) :: IO Float
         z <- getRandom (rtf lz) (rtf hz) :: IO Float
         return $ Boid
-            { bPos  = Vec3D (x, y, z)
-            , bVel  = vScale (Vec3D (x, y, z)) 0.001
-            , bTar  = zeroVec
+            { bPos  = V3 x y z
+            , bVel  = (V3 x y z) * 0.001
+            , bTar  = zero
             , bRad  = 2.5
             , bPred = False
             })
@@ -44,97 +42,53 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
 
 updateBoid :: Boid -> [Boid] -> Boid
 updateBoid (Boid pos vel tar rad pred) neighbors =
-    let velUpdate = vClamp (foldl (updateVelocity pos) zeroVec neighbors) 0.01
+    let velUpdate = vClamp (foldl (updateVelocity pos) zero neighbors) 0.01
         --tarUpdate = vClamp (updateTarget pos tar) 0.01
         bndUpdate = vClamp (updateBounds pos) 0.015
-        newVel    = vScaleTo (vAdd3 vel velUpdate bndUpdate) 0.05
+        newVel    = vScaleTo (vel + velUpdate + bndUpdate) 0.05
     in  Boid
-          { bPos  = vAdd pos newVel
+          { bPos  = pos + newVel
           , bVel  = newVel
-          , bTar  = zeroVec
+          , bTar  = zero
           , bRad  = rad
           , bPred = pred
           }
 
 updateBoidRadius :: Boid -> [(Boid, Float)] -> Boid
 updateBoidRadius (Boid pos vel tar rad pred) neighbors =
-    let velUpdate = vClamp (foldl (updateVelocityRadius pos) zeroVec neighbors) 0.01
+    let velUpdate = vClamp (foldl (updateVelocityRadius pos) zero neighbors) 0.01
         --tarUpdate = vClamp (updateTarget pos tar) 0.01
         bndUpdate = vClamp (updateBounds pos) 0.015
-        newVel    = vScaleTo (vAdd3 vel velUpdate bndUpdate) 0.05
+        newVel    = vScaleTo (vel + velUpdate + bndUpdate) 0.05
     in  Boid
-          { bPos  = vAdd pos newVel
+          { bPos  = pos + newVel
           , bVel  = newVel
-          , bTar  = zeroVec
+          , bTar  = zero
           , bRad  = rad
           , bPred = pred
           }
 
-updateVelocity :: Vec3D -> Vec3D -> Boid -> Vec3D
+updateVelocity :: V3 Float -> V3 Float -> Boid -> V3 Float
 updateVelocity pos vel boid
     | pos == bPos boid = vel
     | otherwise        =
-        let deltaP = vSub (bPos boid) pos
+        let deltaP = (bPos boid) - pos
             len    = vLen deltaP
-        in  vSub (vAdd3 vel deltaP $ vScale (bVel boid) (0.1 / len)) $ vScale deltaP $ 2.5 / len
+        in  (vel + deltaP + ((bVel boid) ^/ (10 * len))) - (deltaP ^* (2.5 / len))
 
-updateVelocityRadius :: Vec3D -> Vec3D -> (Boid, Float) -> Vec3D
+updateVelocityRadius :: V3 Float -> V3 Float -> (Boid, Float) -> V3 Float
 updateVelocityRadius pos vel (boid, radius)
     | pos == bPos boid = vel
     | otherwise        =
-        let deltaP = vSub (bPos boid) pos
+        let deltaP = (bPos boid) - pos
             len    = radius
-        in  vSub (vAdd3 vel deltaP $ vScale (bVel boid) (0.1 / len)) $ vScale deltaP $ 1.5 / len
+        in  (vel + deltaP + ((bVel boid) ^/ (10 * len))) - (deltaP ^* (2.5 / len))
 
-updateTarget :: Vec3D -> Vec3D -> Vec3D
-updateTarget pos tar = vSub tar pos
+updateTarget :: V3 Float -> V3 Float -> V3 Float
+updateTarget pos tar = tar - pos
 
-updateBounds :: Vec3D -> Vec3D
+updateBounds :: V3 Float -> V3 Float
 updateBounds pos
-    | len > 28  = vScale (vSub zeroVec pos) (1 / len)
-    | otherwise = zeroVec
+    | len > 28  = (zero - pos) ^/ len
+    | otherwise = zero
     where len = vLen pos
-
---sortByDistance :: Vec3D -> [Boid] -> [Boid]
---sortByDistance pos = sortBy sortFunc
---    where sortFunc = (\a b -> compare (vSub pos $ bPos a) (vSub pos $ bPos b))
-
-drawBoid :: GL.DisplayList -> Boid -> IO ()
-drawBoid dl boid = GL.preservingMatrix $ do
-    GL.translate $ toGLVec $ bPos boid
-    GL.callList dl
-
-boidDisplayList :: IO GL.DisplayList
-boidDisplayList = GL.defineNewList GL.Compile $ do
-    GL.colorMaterial GL.$= Just (GL.Front, GL.AmbientAndDiffuse)
-    GL.color (GL.Color4 (0.8 :: GL.GLfloat) 0.1 0 1)
-    GL.renderPrimitive GL.Quads $ do
-        vertex (-0.1)   0.1    0.1
-        vertex (-0.1) (-0.1)   0.1
-        vertex   0.1  (-0.1)   0.1
-        vertex   0.1    0.1    0.1
-
-        vertex   0.1    0.1  (-0.1)
-        vertex   0.1  (-0.1) (-0.1)
-        vertex (-0.1) (-0.1) (-0.1)
-        vertex (-0.1)   0.1  (-0.1)
-
-        vertex (-0.1)   0.1    0.1
-        vertex   0.1    0.1    0.1
-        vertex   0.1    0.1  (-0.1)
-        vertex (-0.1)   0.1  (-0.1)
-
-        vertex (-0.1) (-0.1)   0.1
-        vertex (-0.1) (-0.1) (-0.1)
-        vertex   0.1  (-0.1) (-0.1)
-        vertex   0.1  (-0.1)   0.1
-
-        vertex (-0.1)   0.1  (-0.1)
-        vertex (-0.1) (-0.1) (-0.1)
-        vertex (-0.1) (-0.1)   0.1
-        vertex (-0.1)   0.1    0.1
-
-        vertex   0.1    0.1    0.1
-        vertex   0.1  (-0.1)   0.1
-        vertex   0.1  (-0.1) (-0.1)
-        vertex   0.1    0.1  (-0.1)

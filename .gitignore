@@ -1,5 +1,4 @@
 dist
-cabal-dev
 *.o
 *.hi
 *.chi
@@ -7,8 +6,5 @@ cabal-dev
 *.swp
 *.exe
 *.dll
-.virtualenv
-.hsenv
-.cabal-sandbox/
-cabal.sandbox.config
 cabal.config
+.stack-work/
