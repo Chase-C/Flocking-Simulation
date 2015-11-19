@@ -18,7 +18,7 @@ executable boids
                        , random >= 1.0
                        , GLFW-b
                        , GPipe >= 2.1.3
-                       , GPipe-GLFW >= 1.2
+                       , GPipe-GLFW >= 1.2.1
                        , linear >= 1.19
                        , transformers
                        , containers

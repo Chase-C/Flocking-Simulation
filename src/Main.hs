@@ -6,20 +6,11 @@ module Main (main) where
 
 import System.IO
 --import Control.Concurrent.STM       (TQueue, atomically, newTQueueIO, tryReadTQueue, writeTQueue)
-import Control.Monad                (unless, when, void)
 --import Control.Monad.Par            (Par, runPar, parMap)
-import Control.Monad.Trans.RWS.Strict(RWST, ask, asks, evalRWST, get, gets, modify, put)
-import Control.Monad.IO.Class       (liftIO)
-import Control.Monad.Trans.Class    (lift)
---import Foreign.C.String             (CString, newCString, peekCString)
---import Foreign.C.Types              (CInt)
---import Foreign.Marshal.Alloc        (malloc, free)
---import Foreign.Ptr                  (Ptr)
---import Foreign.Storable             (peek)
---import Data.Bits                    ((.|.))
---import Data.Word                    (Word32)
---import Data.Array.IArray            ((//), assocs, elems)
---import Data.List                    (sortBy)
+import Control.Monad                  (unless, when, void)
+import Control.Monad.Trans.RWS.Strict (RWST, ask, asks, evalRWST, get, gets, modify, put)
+import Control.Monad.IO.Class         (liftIO)
+import Control.Monad.Trans.Class      (lift)
 
 import Graphics.GPipe
 import qualified Graphics.GPipe.Context.GLFW as GLFW
@@ -29,6 +20,7 @@ import Linear
 import Boid
 import EventManager
 import Utils
+import Log
 
 import qualified Data.Map as M
 import qualified Octree   as O
@@ -46,47 +38,36 @@ data Env os c ds = Env
     }
 
 data State = State
-    { stateRunning         :: !Bool
-    , stateInputMap        :: InputStateMap
-    , stateGameTime        :: !Double
-    , stateDt              :: !Double
-    , stateWindowWidth     :: !Int
-    , stateWindowHeight    :: !Int
-    , stateXAngle          :: !Float
-    , stateYAngle          :: !Float
-    , stateZAngle          :: !Float
-    , stateZDist           :: !Float
-    , stateMouseDown       :: !Bool
-    , stateDragging        :: !Bool
-    , stateDragStartX      :: !Int
-    , stateDragStartY      :: !Int
-    , stateDragStartXAngle :: !Float
-    , stateDragStartYAngle :: !Float
-    , stateBoids           :: ![Boid]
-    , stateOctree          :: !O.Octree
+    { stateRunning   :: !Bool
+    , stateInputMap  :: InputStateMap
+    , stateXAngle    :: !Float
+    , stateYAngle    :: !Float
+    , stateZDist     :: !Float
+    , stateMouseDown :: !Bool
+    , stateDragging  :: !Bool
+    , stateDragX     :: !Float
+    , stateDragY     :: !Float
+    , stateDragOldX  :: !Float
+    , stateDragOldY  :: !Float
+    , stateBoids     :: ![Boid]
+    , stateOctree    :: !O.Octree
     }
 
 instance (Monad m, Monoid w) => InputStore (RWST r w State m) where
-    getStateMap   = gets stateInputMap
-    setStateMap m = modify $ \s -> s { stateInputMap = m }
+    getStateMap    = gets stateInputMap
+    setStateMap sm = modify $ \s -> s { stateInputMap = sm }
 
 type Sim os c ds = RWST (Env os c ds) () State (ContextT GLFW.GLFWWindow os (ContextFormat c ds) IO)
 
---mouseDownAction :: Sim os c ds ()
---mouseDownAction = modify $ \s -> s { stateMouseDown = True }
---    (SDL.MouseButtonEvent _ _ _ _ b st _ x y) -> do
---        when (b == SDL.SDL_BUTTON_LEFT) $ do
---            let pressed = (st == 1)
---            modify $ \s -> s
---            { stateMouseDown = pressed
---        }
---        unless pressed $
---        modify $ \s -> s
---        { stateDragging = False
---    }
-
 --------------------------------------------------------------------------------
 
+actions :: [EventAction (Sim os c ds)]
+actions = [ CursorAction cursorAction
+          , makeMouseEvent GLFW.MouseButton'1 GLFW.MouseButtonState'Pressed  mouseDownAction
+          , makeMouseEvent GLFW.MouseButton'1 GLFW.MouseButtonState'Released mouseUpAction
+          , makeKeyEvent   GLFW.Key'Q         GLFW.KeyState'Pressed          closeAction
+          , makeKeyEvent   GLFW.Key'Escape    GLFW.KeyState'Pressed          closeAction
+          ]
 
 proj :: Floating a => M44 a -> (V3 a, V3 a) -> (V4 a, V3 a)
 proj modelViewProj (V3 px py pz, c) = (modelViewProj !* V4 px py pz 1, c)
@@ -102,7 +83,8 @@ main :: IO ()
 main = do
     let width    = 1200
         height   = 800
-        numBoids = 1000
+        numBoids = 750
+        bounds   = 16
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
 
@@ -126,7 +108,8 @@ main = do
                                 , V3   0.1  (-0.1)   0.1
                                 ]
 
-        boids <- liftIO $ makeBoids (-32, -32, -32) (32, 32, 32) numBoids
+        boids <- liftIO $ makeBoids (-bounds, -bounds, -bounds)
+                                    (bounds,   bounds,  bounds) numBoids
 
         shader <- compileShader $ do
             primitiveStream <- toPrimitiveStream id
@@ -156,24 +139,19 @@ main = do
               , envShader        = shader
               }
             state = State
-              { stateRunning         = True
-              , stateInputMap        = M.empty
-              , stateGameTime        = 0
-              , stateDt              = 0
-              , stateWindowWidth     = width
-              , stateWindowHeight    = height
-              , stateXAngle          = 0
-              , stateYAngle          = 0
-              , stateZAngle          = 0
-              , stateZDist           = zDist
-              , stateMouseDown       = False
-              , stateDragging        = False
-              , stateDragStartX      = 0
-              , stateDragStartY      = 0
-              , stateDragStartXAngle = 0
-              , stateDragStartYAngle = 0
-              , stateBoids           = []
-              , stateOctree          = O.splitWith (O.fromList boids (V3 0 0 0) 32) ((> 8) . O.count)
+              { stateRunning   = True
+              , stateInputMap  = M.empty
+              , stateXAngle    = 0
+              , stateYAngle    = 0
+              , stateZDist     = zDist
+              , stateMouseDown = False
+              , stateDragging  = False
+              , stateDragX     = 0
+              , stateDragY     = 0
+              , stateDragOldX  = 0
+              , stateDragOldY  = 0
+              , stateBoids     = []
+              , stateOctree    = O.splitWith (O.fromList boids (V3 0 0 0) 32) ((> 8) . O.count)
               }
 
         liftIO $ swapInterval 1
@@ -190,7 +168,8 @@ run = do
     --currTime <- liftIO GLFW.getTime
     --adjustWindow
 
-    --processEvents actions
+    processEvents actions
+    handleRotation
 
     env   <- ask
     state <- get
@@ -209,13 +188,14 @@ run = do
         posB         = envBoidPositions env
         vertB        = envBoidVerts env
         shader       = envShader env
-        --angle        = vlog $ stateXAngle state
-        angle        = stateXAngle state
-        modelRot     = fromQuaternion (axisAngle (V3 1 0.5 0.3) angle)
-        --modelRot     = identity
+        xa           = stateXAngle state
+        ya           = stateYAngle state
+        modelXRot    = fromQuaternion (axisAngle (V3 0 1 0) xa)
+        modelYRot    = fromQuaternion (axisAngle (V3 1 0 0) ya)
+        modelRot     = modelYRot !*! modelXRot
         modelMat     = mkTransformationMat modelRot (V3 0 0 0)
         projMat      = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 100
-        viewMat      = mkTransformationMat identity (- V3 0 0 50)
+        viewMat      = mkTransformationMat identity (- V3 0 0 30)
         viewProjMat  = projMat !*! viewMat !*! modelMat
 
     modify $ \s -> s {
@@ -234,29 +214,50 @@ run = do
         swapContextBuffers
 
     closeRequested <- lift $ GLFW.windowShouldClose
-    unless closeRequested run
+    unless (closeRequested || not (stateRunning state)) run
 
-actions :: [EventAction (Sim os c ds)]
-actions = [makeMouseEvent GLFW.MouseButton'1 GLFW.MouseButtonState'Pressed mouseDownAction]
+handleRotation :: Sim os c ds ()
+handleRotation = do
+    state <- get
+    when (stateDragging state) $ do
+        let x  = stateDragX    state
+            y  = stateDragY    state
+            x' = stateDragOldX state
+            y' = stateDragOldY state
+            xa = stateXAngle   state
+            ya = stateYAngle   state
+        put $ state
+            { stateXAngle = xa + ((x - x') / 512)
+            , stateYAngle = ya + ((y - y') / 512)
+            }
 
 mouseDownAction :: Sim os c ds ()
-mouseDownAction = do
-    angle <- gets stateXAngle
-    modify $ \s -> s { stateXAngle = angle + 0.1 }
+mouseDownAction = modify $ \s -> s { stateMouseDown = True }
 
+mouseUpAction :: Sim os c ds ()
+mouseUpAction = modify $ \s -> s
+    { stateMouseDown = False
+    , stateDragging  = False
+    }
 
-    --when (stateDragging state) $ do
-    --    let sodx  = stateDragStartX      state
-    --        sody  = stateDragStartY      state
-    --        sodxa = stateDragStartXAngle state
-    --        sodya = stateDragStartYAngle state
-    --    (x, y) <- liftIO getMousePos
-    --    let myrot = div (x - sodx) 2
-    --        mxrot = div (y - sody) 2
-    --    modify $ \s -> s
-    --      { stateXAngle = sodxa + fromIntegral mxrot
-    --      , stateYAngle = sodya + fromIntegral myrot
-    --      }
+cursorAction :: (Double, Double) -> Sim os c ds ()
+cursorAction (x, y) = do
+    state <- get
+    when (stateMouseDown state) $
+        let (x', y') = if stateDragging state
+                         then (stateDragX state, stateDragY state)
+                         else (realToFrac x,     realToFrac y)
+        in put $ state
+            { stateDragging = True
+            , stateDragX    = realToFrac x
+            , stateDragY    = realToFrac y
+            , stateDragOldX = x'
+            , stateDragOldY = y'
+            }
+
+closeAction :: Sim os c ds ()
+closeAction = modify $ \s -> s { stateRunning = False }
+
 
     --newTime <- liftIO SDL.getTicks
     --modify $ \s -> s
@@ -274,129 +275,3 @@ mouseDownAction = do
 --    let ticks = div 1000 (fromIntegral fps) :: Word32
 --    if  dt > ticks then return 0
 --                   else return $ ticks - dt
---
---processEvents :: Demo ()
---processEvents = do
---    evPtr <- liftIO malloc :: Demo (Ptr SDL.Event)
---    val   <- liftIO $ SDL.pollEvent evPtr
---    case val of
---      0 -> liftIO $ free evPtr
---      _ -> do
---          ev <- liftIO $ peek evPtr :: Demo SDL.Event
---          liftIO $ free evPtr
---          processEvent ev
---          processEvents
---
---processEvent :: SDL.Event -> Demo ()
---processEvent ev = do
---    --liftIO $ withFile "log.txt" AppendMode (\h -> hPutStrLn h $ show ev)
---    case ev of
---      (SDL.WindowEvent _ _ _ wev w h) -> do
---          when (wev == SDL.SDL_WINDOWEVENT_RESIZED) $
---            modify $ \s -> s
---              { stateWindowWidth  = fi w
---              , stateWindowHeight = fi h
---              }
---          adjustWindow
---
---      (SDL.MouseButtonEvent _ _ _ _ b st _ x y) -> do
---          when (b == SDL.SDL_BUTTON_LEFT) $ do
---              let pressed = (st == 1)
---              modify $ \s -> s
---                { stateMouseDown = pressed
---                }
---              unless pressed $
---                modify $ \s -> s
---                  { stateDragging = False
---                  }
---
---      (SDL.MouseMotionEvent _ _ _ _ _ x y _ _) -> do
---          state <- get
---          when (stateMouseDown state && not (stateDragging state)) $
---            put $ state
---              { stateDragging        = True
---              , stateDragStartX      = fi x
---              , stateDragStartY      = fi y
---              , stateDragStartXAngle = stateXAngle state
---              , stateDragStartYAngle = stateYAngle state
---              }
---
---      (SDL.MouseWheelEvent _ _ _ _ _ y) -> do
---          env <- ask
---          modify $ \s -> s
---            { stateZDist =
---                let zDist' = stateZDist s + ((realToFrac y :: Float) / (-2.0))
---                in  curb (envZDistClosest env) (envZDistFarthest env) zDist'
---            }
---          adjustWindow
---
---      (SDL.KeyboardEvent t _ _ _ x (SDL.Keysym k _ _)) ->
---          when (t == SDL.SDL_KEYUP) $ do
---            -- Q, Esc: exit
---            when (k == SDL.SDL_SCANCODE_Q || k == SDL.SDL_SCANCODE_ESCAPE) $
---                modify $ \s -> s
---                  { stateRunning = False
---                  }
---
---      (SDL.QuitEvent _ _) ->
---          modify $ \s -> s
---            { stateRunning = False
---            }
---
---      _else -> return ()
---    where fi = fromIntegral
---
---draw :: Demo ()
---draw = do
---    env   <- ask
---    state <- get
---    let xa = stateXAngle state
---        ya = stateYAngle state
---        za = stateZAngle state
---        dispList = envBoidDispList env
---    liftIO $ do
---        GL.clear [GL.ColorBuffer, GL.DepthBuffer]
---        GL.preservingMatrix $ do
---            GL.rotate (realToFrac xa) xunit
---            GL.rotate (realToFrac ya) yunit
---            GL.rotate (realToFrac za) zunit
---            O.octreeMapM_ (drawBoid $ dispList) $ stateOctree state
---      where
---        xunit = GL.Vector3 1 0 0 :: GL.Vector3 GL.GLfloat
---        yunit = GL.Vector3 0 1 0 :: GL.Vector3 GL.GLfloat
---        zunit = GL.Vector3 0 0 1 :: GL.Vector3 GL.GLfloat
---
---adjustWindow :: Demo ()
---adjustWindow = do
---    state <- get
---    let width  = stateWindowWidth  state
---        height = stateWindowHeight state
---        zDist  = stateZDist        state
---
---    let pos   = GL.Position 0 0
---        size  = GL.Size (fromIntegral width) (fromIntegral height)
---        h     = fromIntegral height / fromIntegral width :: Float
---        znear = 1           :: Float
---        zfar  = 120         :: Float
---        xmax  = znear * 0.5 :: Float
---    liftIO $ do
---        GL.viewport   GL.$= (pos, size)
---        GL.matrixMode GL.$= GL.Projection
---        GL.loadIdentity
---        GL.frustum (realToFrac $ -xmax)
---                   (realToFrac    xmax)
---                   (realToFrac $ -xmax * realToFrac h)
---                   (realToFrac $  xmax * realToFrac h)
---                   (realToFrac    znear)
---                   (realToFrac    zfar)
---        GL.matrixMode GL.$= GL.Modelview 0
---        GL.loadIdentity
---        GL.translate (GL.Vector3 0 0 (negate $ realToFrac zDist) :: GL.Vector3 GL.GLfloat)
---
-----------------------------------------------------------------------------------
---
---curb :: Ord a => a -> a -> a -> a
---curb l h x
---  | x < l     = l
---  | x > h     = h
---  | otherwise = x

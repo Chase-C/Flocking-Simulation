@@ -89,6 +89,6 @@ updateTarget pos tar = tar - pos
 
 updateBounds :: V3 Float -> V3 Float
 updateBounds pos
-    | len > 28  = (zero - pos) ^/ len
+    | len > 12  = (zero - pos) ^/ len
     | otherwise = zero
     where len = vLen pos
