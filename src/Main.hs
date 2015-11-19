@@ -66,19 +66,11 @@ data State = State
     , stateOctree          :: !O.Octree
     }
 
-type Sim os c ds = RWST (Env os c ds) () State (ContextT GLFW.GLFWWindow os (ContextFormat c ds) IO)
-
 instance (Monad m, Monoid w) => InputStore (RWST r w State m) where
     getStateMap   = gets stateInputMap
     setStateMap m = modify $ \s -> s { stateInputMap = m }
 
-mouseDownAction :: Sim os c ds ()
-mouseDownAction = do
-    angle <- gets stateXAngle
-    modify $ \s -> s { stateXAngle = angle + 0.1 }
-
-actions :: [EventAction (Sim os c ds)]
-actions = [makeMouseEvent GLFW.MouseButton'1 GLFW.MouseButtonState'Pressed mouseDownAction]
+type Sim os c ds = RWST (Env os c ds) () State (ContextT GLFW.GLFWWindow os (ContextFormat c ds) IO)
 
 --mouseDownAction :: Sim os c ds ()
 --mouseDownAction = modify $ \s -> s { stateMouseDown = True }
@@ -198,7 +190,7 @@ run = do
     --currTime <- liftIO GLFW.getTime
     --adjustWindow
 
-    processEvents actions
+    --processEvents actions
 
     env   <- ask
     state <- get
@@ -243,6 +235,15 @@ run = do
 
     closeRequested <- lift $ GLFW.windowShouldClose
     unless closeRequested run
+
+actions :: [EventAction (Sim os c ds)]
+actions = [makeMouseEvent GLFW.MouseButton'1 GLFW.MouseButtonState'Pressed mouseDownAction]
+
+mouseDownAction :: Sim os c ds ()
+mouseDownAction = do
+    angle <- gets stateXAngle
+    modify $ \s -> s { stateXAngle = angle + 0.1 }
+
 
     --when (stateDragging state) $ do
     --    let sodx  = stateDragStartX      state
