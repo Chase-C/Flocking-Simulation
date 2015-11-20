@@ -43,13 +43,13 @@ data State = State
     , stateXAngle    :: !Float
     , stateYAngle    :: !Float
     , stateZDist     :: !Float
+    , stateZoomDir   :: !Float
     , stateMouseDown :: !Bool
     , stateDragging  :: !Bool
     , stateDragX     :: !Float
     , stateDragY     :: !Float
     , stateDragOldX  :: !Float
     , stateDragOldY  :: !Float
-    , stateBoids     :: ![Boid]
     , stateOctree    :: !O.Octree
     }
 
@@ -65,25 +65,19 @@ actions :: [EventAction (Sim os c ds)]
 actions = [ CursorAction cursorAction
           , makeMouseEvent GLFW.MouseButton'1 GLFW.MouseButtonState'Pressed  mouseDownAction
           , makeMouseEvent GLFW.MouseButton'1 GLFW.MouseButtonState'Released mouseUpAction
+          , makeKeyEvent   GLFW.Key'W         GLFW.KeyState'Pressed          (zoomOnAction True)
+          , makeKeyEvent   GLFW.Key'W         GLFW.KeyState'Released         zoomOffAction
+          , makeKeyEvent   GLFW.Key'S         GLFW.KeyState'Pressed          (zoomOnAction False)
+          , makeKeyEvent   GLFW.Key'S         GLFW.KeyState'Released         zoomOffAction
           , makeKeyEvent   GLFW.Key'Q         GLFW.KeyState'Pressed          closeAction
           , makeKeyEvent   GLFW.Key'Escape    GLFW.KeyState'Pressed          closeAction
           ]
-
-proj :: Floating a => M44 a -> (V3 a, V3 a) -> (V4 a, V3 a)
-proj modelViewProj (V3 px py pz, c) = (modelViewProj !* V4 px py pz 1, c)
-
-offsetVert :: Floating a => (V3 a, V3 a) -> (V3 a, V3 a)
-offsetVert (V3 xx yy zz, V3 a b c) =  (V3 x y z, V3 0.7 0.2 0.4)
-    where
-        x = xx + a
-        y = yy + b
-        z = zz + c
 
 main :: IO ()
 main = do
     let width    = 1200
         height   = 800
-        numBoids = 750
+        numBoids = 100
         bounds   = 16
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
@@ -144,18 +138,31 @@ main = do
               , stateXAngle    = 0
               , stateYAngle    = 0
               , stateZDist     = zDist
+              , stateZoomDir   = 0
               , stateMouseDown = False
               , stateDragging  = False
               , stateDragX     = 0
               , stateDragY     = 0
               , stateDragOldX  = 0
               , stateDragOldY  = 0
-              , stateBoids     = []
               , stateOctree    = O.splitWith (O.fromList boids (V3 0 0 0) 32) ((> 8) . O.count)
               }
 
         liftIO $ swapInterval 1
         runSim env state
+
+proj :: Floating a => M44 a -> (V3 a, V3 a) -> (V4 a, V3 a)
+proj modelViewProj (V3 px py pz, c) = (modelViewProj !* V4 px py pz 1, c)
+
+offsetVert :: Floating a => (V3 a, V3 a) -> (V3 a, V3 a)
+offsetVert (V3 xx yy zz, V3 a b c) =  (V3 x y z, V3 0.7 0.2 0.4)
+    where
+        x = xx + a
+        y = yy + b
+        z = zz + c
+
+
+--------------------------------------------------------------------------------
 
 runSim :: (ContextColorFormat c, Color c Float ~ V3 Float, DepthRenderable ds)
        => Env os c ds -> State -> ContextT GLFW.GLFWWindow os (ContextFormat c ds) IO ()
@@ -169,37 +176,21 @@ run = do
     --adjustWindow
 
     processEvents actions
-    handleRotation
+    handleCamera
 
-    env   <- ask
-    state <- get
-    (V2 w h) <- lift getContextBuffersSize
+    env         <- ask
+    tree        <- gets stateOctree
+    viewProjMat <- makeMVP
 
-    let octree       = stateOctree state
-        cen          = O.center octree
-        len          = O.len octree
-        boids        = O.flattenTree octree
-        neighborFunc = (\b -> O.kNearestNeighbors octree (bPos b) 7 (bRad b))
-        updateFunc   = (\b -> updateBoidRadius b $ neighborFunc b)
-        --newTree      = O.splitWith (O.fromList (runPar $ parMap updateFunc boids) cen len) ((> 8) . O.count)
-        newTree      = O.splitWith (O.fromList (map updateFunc boids) cen len) ((> 8) . O.count)
-        positions    = map bPos $ O.flattenTree newTree
-        uMVP         = envMVP env
+    let (bs, tree')  = updateOctree tree
+        positions    = map bPos bs
+        uMVP         = envMVP           env
         posB         = envBoidPositions env
-        vertB        = envBoidVerts env
-        shader       = envShader env
-        xa           = stateXAngle state
-        ya           = stateYAngle state
-        modelXRot    = fromQuaternion (axisAngle (V3 0 1 0) xa)
-        modelYRot    = fromQuaternion (axisAngle (V3 1 0 0) ya)
-        modelRot     = modelYRot !*! modelXRot
-        modelMat     = mkTransformationMat modelRot (V3 0 0 0)
-        projMat      = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 100
-        viewMat      = mkTransformationMat identity (- V3 0 0 30)
-        viewProjMat  = projMat !*! viewMat !*! modelMat
+        vertB        = envBoidVerts     env
+        shader       = envShader        env
 
-    modify $ \s -> s {
-        stateOctree = newTree
+    modify $ \s -> s
+        { stateOctree = tree'
         }
 
     lift $ do
@@ -214,22 +205,61 @@ run = do
         swapContextBuffers
 
     closeRequested <- lift $ GLFW.windowShouldClose
-    unless (closeRequested || not (stateRunning state)) run
+    running        <- gets stateRunning
+    unless (closeRequested || not running) run
 
-handleRotation :: Sim os c ds ()
-handleRotation = do
+--------------------------------------------------------------------------------
+
+handleCamera :: Sim os c ds ()
+handleCamera = do
     state <- get
-    when (stateDragging state) $ do
-        let x  = stateDragX    state
-            y  = stateDragY    state
-            x' = stateDragOldX state
-            y' = stateDragOldY state
-            xa = stateXAngle   state
-            ya = stateYAngle   state
-        put $ state
-            { stateXAngle = xa + ((x - x') / 512)
-            , stateYAngle = ya + ((y - y') / 512)
-            }
+    env   <- ask
+    let zmin       = envZDistClosest  env
+        zmax       = envZDistFarthest env
+        zdir       = stateZoomDir     state
+        z          = stateZDist       state
+        x          = stateDragX       state
+        y          = stateDragY       state
+        x'         = stateDragOldX    state
+        y'         = stateDragOldY    state
+        xa         = stateXAngle      state
+        ya         = stateYAngle      state
+        (xa', ya') = if stateDragging state
+                       then (xa + ((x - x') / 512), ya + ((y - y') / 512))
+                       else (xa, ya)
+    put $ state
+        { stateXAngle = xa'
+        , stateYAngle = ya'
+        , stateZDist  = min zmax (max zmin (z + (zdir)))
+        }
+
+makeMVP :: Sim os c ds (M44 Float)
+makeMVP = do
+    state    <- get
+    (V2 w h) <- lift getContextBuffersSize
+    let xa        = stateXAngle state
+        ya        = stateYAngle state
+        zDist     = stateZDist  state
+        xQuat     = axisAngle (V3 0 1 0) xa
+        yQuat     = axisAngle (V3 1 0 0) ya
+        modelRot  = fromQuaternion $ yQuat * xQuat
+        modelMat  = mkTransformationMat modelRot (V3 0 0 0)
+        projMat   = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 100
+        viewMat   = mkTransformationMat identity (- V3 0 0 zDist)
+    return $ projMat !*! viewMat !*! modelMat
+
+updateOctree :: O.Octree -> ([Boid], O.Octree)
+updateOctree tree = (boids', tree')
+    where center       = O.center      tree
+          len          = O.len         tree
+          boids        = O.flattenTree tree
+          neighborFunc = (\b -> O.kNearestNeighbors tree (bPos b) 7 (bRad b))
+          updateFunc   = (\b -> updateBoidRadius b $ neighborFunc b)
+          --boids'       = runPar $ parMap updateFunc boids
+          boids'       = map updateFunc boids
+          tree'        = O.splitWith (O.fromList boids' center len) ((> 8) . O.count)
+
+--------------------------------------------------------------------------------
 
 mouseDownAction :: Sim os c ds ()
 mouseDownAction = modify $ \s -> s { stateMouseDown = True }
@@ -258,20 +288,8 @@ cursorAction (x, y) = do
 closeAction :: Sim os c ds ()
 closeAction = modify $ \s -> s { stateRunning = False }
 
+zoomOnAction :: Bool -> Sim os c ds ()
+zoomOnAction zoomIn = modify $ \s -> s { stateZoomDir = if zoomIn then (-0.3) else 0.3 }
 
-    --newTime <- liftIO SDL.getTicks
-    --modify $ \s -> s
-    --  { stateGameTime = currTime
-    --  , stateDt       = newTime - stateGameTime state
-    --  }
-
-    --remainingTime <- remainingFrameTime
-    --liftIO $ SDL.delay remainingTime
-
---remainingFrameTime :: Demo Word32
---remainingFrameTime = do
---    fps <- asks envFPS
---    dt  <- gets stateDt
---    let ticks = div 1000 (fromIntegral fps) :: Word32
---    if  dt > ticks then return 0
---                   else return $ ticks - dt
+zoomOffAction :: Sim os c ds ()
+zoomOffAction = modify $ \s -> s { stateZoomDir = 0 }
