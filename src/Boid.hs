@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 
 module Boid where
 
@@ -6,9 +6,8 @@ module Boid where
 
 import Data.List
 import Control.Monad (forM)
---import Control.DeepSeq
---import Control.DeepSeq.Generics (genericRnf)
---import GHC.Generics
+import Control.DeepSeq
+import GHC.Generics (Generic)
 
 import Linear
 import Utils
@@ -21,10 +20,7 @@ data Boid = Boid
               , bTar  :: V3 Float
               , bRad  :: !Float
               , bPred :: !Bool
-              } deriving (Show, Eq)
-
---instance NFData Boid where
---    rnf = genericRnf
+              } deriving (Show, Eq, Generic, NFData)
 
 makeBoids :: (Int, Int, Int) -> (Int, Int, Int) -> Int -> IO [Boid]
 makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
@@ -89,6 +85,6 @@ updateTarget pos tar = tar - pos
 
 updateBounds :: V3 Float -> V3 Float
 updateBounds pos
-    | len > 12  = (zero - pos) ^/ len
+    | len > 28  = (zero - pos) ^/ len
     | otherwise = zero
     where len = vLen pos

@@ -22,3 +22,6 @@ executable boids
                        , linear >= 1.19
                        , transformers
                        , containers
+                       , deepseq >= 1.4.1
+                       , parallel >= 3.2.0
+                       , monad-par >= 0.3.4

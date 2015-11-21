@@ -5,8 +5,7 @@ module Main (main) where
 --------------------------------------------------------------------------------
 
 import System.IO
---import Control.Concurrent.STM       (TQueue, atomically, newTQueueIO, tryReadTQueue, writeTQueue)
---import Control.Monad.Par            (Par, runPar, parMap)
+import Control.Parallel.Strategies    (parMap, rdeepseq)
 import Control.Monad                  (unless, when, void)
 import Control.Monad.Trans.RWS.Strict (RWST, ask, asks, evalRWST, get, gets, modify, put)
 import Control.Monad.IO.Class         (liftIO)
@@ -23,7 +22,7 @@ import Utils
 import Log
 
 import qualified Data.Map as M
-import qualified Octree   as O
+import qualified OctreePar   as O
 
 --------------------------------------------------------------------------------
 
@@ -77,8 +76,8 @@ main :: IO ()
 main = do
     let width    = 1200
         height   = 800
-        numBoids = 100
-        bounds   = 16
+        numBoids = 1000
+        bounds   = 32
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
 
@@ -255,8 +254,8 @@ updateOctree tree = (boids', tree')
           boids        = O.flattenTree tree
           neighborFunc = (\b -> O.kNearestNeighbors tree (bPos b) 7 (bRad b))
           updateFunc   = (\b -> updateBoidRadius b $ neighborFunc b)
-          --boids'       = runPar $ parMap updateFunc boids
-          boids'       = map updateFunc boids
+          boids'       = parMap rdeepseq updateFunc boids
+          --boids'       = map updateFunc boids
           tree'        = O.splitWith (O.fromList boids' center len) ((> 8) . O.count)
 
 --------------------------------------------------------------------------------
