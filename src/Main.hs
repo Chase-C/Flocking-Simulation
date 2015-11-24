@@ -31,9 +31,9 @@ data Env os c ds = Env
     , envZDistClosest  :: !Float
     , envZDistFarthest :: !Float
     , envMVP           :: Buffer os (Uniform (V4 (B4 Float)))
-    , envBoidPositions :: Buffer os (B3 Float)
+    , envBoidPositions :: Buffer os (B3 Float, B3 Float)
     , envBoidVerts     :: Buffer os (B3 Float)
-    , envShader        :: PrimitiveArray Triangles (B3 Float, B3 Float) -> Render os (ContextFormat c ds) ()
+    , envShader        :: PrimitiveArray Triangles (B3 Float, (B3 Float, B3 Float)) -> Render os (ContextFormat c ds) ()
     }
 
 data State = State
@@ -83,25 +83,25 @@ main = do
 
     runContextT (GLFW.newContext' [] winConf) (ContextFormatColorDepth RGB8 Depth16) $ do
         uMVP      :: Buffer os (Uniform (V4 (B4 Float))) <- newBuffer 1
-        boidPos   :: Buffer os (B3 Float)                <- newBuffer numBoids
+        boidPos   :: Buffer os (B3 Float, B3 Float)      <- newBuffer numBoids
         boidVerts :: Buffer os (B3 Float)                <- newBuffer 14
-        writeBuffer boidVerts 0 [ V3   0.0    0.05  0.0
-                                , V3   0.0    0.0   0.2
-                                , V3 (-0.1)   0.0   0.0
-                                , V3   0.0  (-0.05) 0.0
-                                , V3   0.0    0.05  0.0
-                                , V3   0.1    0.0   0.0
-                                , V3   0.0    0.0   0.2
-                                , V3   0.0  (-0.05) 0.0
+        writeBuffer boidVerts 0 [ V3   0.0    0.1  0.0
+                                , V3   0.0    0.0  0.4
+                                , V3 (-0.2)   0.0  0.0
+                                , V3   0.0  (-0.1) 0.0
+                                , V3   0.0    0.1  0.0
+                                , V3   0.2    0.0  0.0
+                                , V3   0.0    0.0  0.4
+                                , V3   0.0  (-0.1) 0.0
                                 ]
 
         boids <- liftIO $ makeBoids (-bounds, -bounds, -bounds)
-                                    (bounds,   bounds,  bounds) numBoids
+                                    ( bounds,  bounds,  bounds) numBoids
 
         shader <- compileShader $ do
             primitiveStream <- toPrimitiveStream id
             modelViewProj   <- getUniform (const (uMVP, 0))
-            let primitiveStream' = fmap (proj modelViewProj . offsetVert) primitiveStream
+            let primitiveStream' = fmap (proj modelViewProj . transformVert) primitiveStream
                 colorOption      = ContextColorOption NoBlending (V3 True True True)
                 depthOption      = DepthOption Less True
                 rasterOptions    = (FrontAndBack, ViewPort 0 (V2 width height), DepthRange 0 1)
@@ -144,16 +144,19 @@ main = do
         liftIO $ swapInterval 1
         runSim env state
 
-proj :: Floating a => M44 a -> (V3 a, V3 a) -> (V4 a, V3 a)
-proj modelViewProj (V3 px py pz, c) = (modelViewProj !* V4 px py pz 1, c)
+proj :: Floating a => M44 a -> (V4 a, V3 a) -> (V4 a, V3 a)
+proj modelViewProj (vert, c) = (modelViewProj !* vert, c)
 
-offsetVert :: Floating a => (V3 a, V3 a) -> (V3 a, V3 a)
-offsetVert (V3 xx yy zz, V3 a b c) =  (V3 x y z, V3 0.7 0.2 0.4)
+transformVert :: Floating a => (V3 a, (V3 a, V3 a)) -> (V4 a, V3 a)
+transformVert (V3 x y z, (pos, dir)) = (vert, V3 0.7 0.2 0.4)
+--transformVert (vert, (pos, dir@(V3 dx dy dz))) = (mk4 $ vert ^+^ pos, V3 0.7 0.2 0.4)
     where
-        x = xx + a
-        y = yy + b
-        z = zz + c
-
+        xaxis = vNorm $ cross (V3 0 1 0) dir
+        yaxis = vNorm $ cross dir        xaxis
+        rot   = V3 xaxis yaxis dir
+        mat   = mkTransformationMat rot pos
+        vert  = mat !* V4 x y z 1
+        mk4 (V3 n m l) = V4 n m l 1
 
 --------------------------------------------------------------------------------
 
@@ -176,7 +179,7 @@ run = do
     viewProjMat <- makeMVP
 
     let (bs, tree')  = updateOctree tree
-        positions    = map bPos bs
+        positions    = map (\b -> (bPos b, bVel b)) bs
         uMVP         = envMVP           env
         posB         = envBoidPositions env
         vertB        = envBoidVerts     env
