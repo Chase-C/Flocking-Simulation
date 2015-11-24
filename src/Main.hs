@@ -85,14 +85,14 @@ main = do
         uMVP      :: Buffer os (Uniform (V4 (B4 Float))) <- newBuffer 1
         boidPos   :: Buffer os (B3 Float, B3 Float) <- newBuffer numBoids
         boidVerts :: Buffer os (B3 Float)           <- newBuffer 14
-        writeBuffer boidVerts 0 [ V3   0.0    0.1  0.0
-                                , V3   0.0    0.0  0.5
-                                , V3 (-0.2)   0.0  0.0
-                                , V3   0.0  (-0.1) 0.0
-                                , V3   0.0    0.1  0.0
-                                , V3   0.2    0.0  0.0
-                                , V3   0.0    0.0  0.5
-                                , V3   0.0  (-0.1) 0.0
+        writeBuffer boidVerts 0 [ V3   0.0    0.1  (-0.1)
+                                , V3   0.0    0.0    0.4
+                                , V3 (-0.2)   0.0  (-0.1)
+                                , V3   0.0  (-0.1) (-0.1)
+                                , V3   0.0    0.1  (-0.1)
+                                , V3   0.2    0.0  (-0.1)
+                                , V3   0.0    0.0    0.4
+                                , V3   0.0  (-0.1) (-0.1)
                                 ]
 
         boids <- liftIO $ makeBoids (-bounds, -bounds, -bounds)
