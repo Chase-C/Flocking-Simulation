@@ -86,12 +86,12 @@ main = do
         boidPos   :: Buffer os (B3 Float, B3 Float) <- newBuffer numBoids
         boidVerts :: Buffer os (B3 Float)           <- newBuffer 14
         writeBuffer boidVerts 0 [ V3   0.0    0.1  0.0
-                                , V3   0.0    0.0  0.4
+                                , V3   0.0    0.0  0.5
                                 , V3 (-0.2)   0.0  0.0
                                 , V3   0.0  (-0.1) 0.0
                                 , V3   0.0    0.1  0.0
                                 , V3   0.2    0.0  0.0
-                                , V3   0.0    0.0  0.4
+                                , V3   0.0    0.0  0.5
                                 , V3   0.0  (-0.1) 0.0
                                 ]
 
@@ -145,14 +145,28 @@ main = do
         runSim env state
 
 transformStream :: Floating a => (M44 a, M44 a, M44 a) -> (V3 a, (V3 a, V3 a)) -> (V4 a, V3 a)
+--transformStream (m, v, p) (V3 x y z, (V3 px py pz, dir)) = (transformMat !* (V4 (x + px) (y + py) (z + pz) 1), V3 0.7 0.2 0.4)
 transformStream (m, v, p) (V3 x y z, (pos, dir)) = (transformMat !* (V4 x y z 1), V3 0.7 0.2 0.4)
+--transformStream (m, v, p) (vert, (V3 px py pz, dir)) = (transformMat !* (V4 (x + px) (y + py) (z + pz) 1), V3 0.7 0.2 0.4)
     where
-        xaxis        = vNorm $ cross (V3 0 0 1) dir
-        yaxis        = vNorm $ cross dir        xaxis
-        rot          = V3 xaxis yaxis dir
-        rotationMat  = mkTransformationMat rot pos
+        normDir      = vNorm dir
+        axis         = cross (V3 0 0 1) normDir
+        angle        = acos $ vDot normDir (V3 0 0 1)
+        sinA         = sin $ angle / 2
+        cosA         = cos $ angle / 2
+        qAxis        = sinA *^ axis
+        quat         = Quaternion cosA qAxis
+        --xaxis        = cross (V3 0 1 0) normDir
+        --yaxis        = cross normDir    xaxis
+        --rot          = V3 xaxis yaxis normDir
+        --rotationMat  = mkTransformationMat rot pos
+        rotationMat  = mkTransformation quat pos
+        --(V3 x y z)   = rotate quat vert
+        --(V4 x y z _) = rotationMat !* (V4 vx vy vz 1)
         --transformMat = p !*! rotationMat !*! v !*! m
         transformMat = p !*! v !*! m !*! rotationMat
+        --transformMat = p !*! v !*! m
+        --transformMat = transpose $ transpose v !*! transpose p
 
 --------------------------------------------------------------------------------
 
