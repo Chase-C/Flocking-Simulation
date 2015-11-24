@@ -30,7 +30,7 @@ data Env os c ds = Env
     { envFPS           :: !Int
     , envZDistClosest  :: !Float
     , envZDistFarthest :: !Float
-    , envMVP           :: Buffer os (Uniform (V4 (B4 Float)))
+    , envMVP           :: Buffer os (Uniform (V4 (B4 Float), V4 (B4 Float), V4 (B4 Float)))
     , envBoidPositions :: Buffer os (B3 Float, B3 Float)
     , envBoidVerts     :: Buffer os (B3 Float)
     , envShader        :: PrimitiveArray Triangles (B3 Float, (B3 Float, B3 Float)) -> Render os (ContextFormat c ds) ()
@@ -82,9 +82,9 @@ main = do
         winConf = GLFW.WindowConf width height "Flocking Simulation"
 
     runContextT (GLFW.newContext' [] winConf) (ContextFormatColorDepth RGB8 Depth16) $ do
-        uMVP      :: Buffer os (Uniform (V4 (B4 Float))) <- newBuffer 1
-        boidPos   :: Buffer os (B3 Float, B3 Float)      <- newBuffer numBoids
-        boidVerts :: Buffer os (B3 Float)                <- newBuffer 14
+        uMVP      :: Buffer os (Uniform (V4 (B4 Float), V4 (B4 Float), V4 (B4 Float))) <- newBuffer 1
+        boidPos   :: Buffer os (B3 Float, B3 Float) <- newBuffer numBoids
+        boidVerts :: Buffer os (B3 Float)           <- newBuffer 14
         writeBuffer boidVerts 0 [ V3   0.0    0.1  0.0
                                 , V3   0.0    0.0  0.4
                                 , V3 (-0.2)   0.0  0.0
@@ -100,8 +100,8 @@ main = do
 
         shader <- compileShader $ do
             primitiveStream <- toPrimitiveStream id
-            modelViewProj   <- getUniform (const (uMVP, 0))
-            let primitiveStream' = fmap (proj modelViewProj . transformVert) primitiveStream
+            mvp             <- getUniform (const (uMVP, 0))
+            let primitiveStream' = fmap (transformStream mvp) primitiveStream
                 colorOption      = ContextColorOption NoBlending (V3 True True True)
                 depthOption      = DepthOption Less True
                 rasterOptions    = (FrontAndBack, ViewPort 0 (V2 width height), DepthRange 0 1)
@@ -144,19 +144,15 @@ main = do
         liftIO $ swapInterval 1
         runSim env state
 
-proj :: Floating a => M44 a -> (V4 a, V3 a) -> (V4 a, V3 a)
-proj modelViewProj (vert, c) = (modelViewProj !* vert, c)
-
-transformVert :: Floating a => (V3 a, (V3 a, V3 a)) -> (V4 a, V3 a)
-transformVert (V3 x y z, (pos, dir)) = (vert, V3 0.7 0.2 0.4)
---transformVert (vert, (pos, dir@(V3 dx dy dz))) = (mk4 $ vert ^+^ pos, V3 0.7 0.2 0.4)
+transformStream :: Floating a => (M44 a, M44 a, M44 a) -> (V3 a, (V3 a, V3 a)) -> (V4 a, V3 a)
+transformStream (m, v, p) (V3 x y z, (pos, dir)) = (transformMat !* (V4 x y z 1), V3 0.7 0.2 0.4)
     where
-        xaxis = vNorm $ cross (V3 0 1 0) dir
-        yaxis = vNorm $ cross dir        xaxis
-        rot   = V3 xaxis yaxis dir
-        mat   = mkTransformationMat rot pos
-        vert  = mat !* V4 x y z 1
-        mk4 (V3 n m l) = V4 n m l 1
+        xaxis        = vNorm $ cross (V3 0 0 1) dir
+        yaxis        = vNorm $ cross dir        xaxis
+        rot          = V3 xaxis yaxis dir
+        rotationMat  = mkTransformationMat rot pos
+        --transformMat = p !*! rotationMat !*! v !*! m
+        transformMat = p !*! v !*! m !*! rotationMat
 
 --------------------------------------------------------------------------------
 
@@ -229,20 +225,21 @@ handleCamera = do
         , stateZDist  = min zmax (max zmin (z + (zdir)))
         }
 
-makeMVP :: Sim os c ds (M44 Float)
+makeMVP :: Sim os c ds (M44 Float, M44 Float, M44 Float)
 makeMVP = do
     state    <- get
     (V2 w h) <- lift getContextBuffersSize
-    let xa        = stateXAngle state
-        ya        = stateYAngle state
-        zDist     = stateZDist  state
-        xQuat     = axisAngle (V3 0 1 0) xa
-        yQuat     = axisAngle (V3 1 0 0) ya
-        modelRot  = fromQuaternion $ yQuat * xQuat
-        modelMat  = mkTransformationMat modelRot (V3 0 0 0)
-        projMat   = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 100
-        viewMat   = mkTransformationMat identity (- V3 0 0 zDist)
-    return $ projMat !*! viewMat !*! modelMat
+    let xa       = stateXAngle state
+        ya       = stateYAngle state
+        zDist    = stateZDist  state
+        xQuat    = axisAngle (V3 0 1 0) xa
+        yQuat    = axisAngle (V3 1 0 0) ya
+        modelRot = fromQuaternion $ yQuat * xQuat
+        modelMat = mkTransformationMat modelRot (V3 0 0 0)
+        projMat  = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 100
+        viewMat  = mkTransformationMat identity (- V3 0 0 zDist)
+    --return $ projMat !*! viewMat !*! modelMat
+    return (modelMat, viewMat, projMat)
 
 updateOctree :: O.Octree -> ([Boid], O.Octree)
 updateOctree tree = (boids', tree')
