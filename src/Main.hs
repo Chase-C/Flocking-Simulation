@@ -30,7 +30,7 @@ data Env os c ds = Env
     { envFPS           :: !Int
     , envZDistClosest  :: !Float
     , envZDistFarthest :: !Float
-    , envMVP           :: Buffer os (Uniform (V4 (B4 Float), V4 (B4 Float), V4 (B4 Float)))
+    , envMVP           :: Buffer os (Uniform (V4 (B4 Float)))
     , envBoidPositions :: Buffer os (B3 Float, B3 Float)
     , envBoidVerts     :: Buffer os (B3 Float)
     , envShader        :: PrimitiveArray Triangles (B3 Float, (B3 Float, B3 Float)) -> Render os (ContextFormat c ds) ()
@@ -82,7 +82,7 @@ main = do
         winConf = GLFW.WindowConf width height "Flocking Simulation"
 
     runContextT (GLFW.newContext' [] winConf) (ContextFormatColorDepth RGB8 Depth16) $ do
-        uMVP      :: Buffer os (Uniform (V4 (B4 Float), V4 (B4 Float), V4 (B4 Float))) <- newBuffer 1
+        uMVP      :: Buffer os (Uniform (V4 (B4 Float))) <- newBuffer 1
         boidPos   :: Buffer os (B3 Float, B3 Float) <- newBuffer numBoids
         boidVerts :: Buffer os (B3 Float)           <- newBuffer 14
         writeBuffer boidVerts 0 [ V3   0.0    0.1  0.0
@@ -144,10 +144,8 @@ main = do
         liftIO $ swapInterval 1
         runSim env state
 
-transformStream :: Floating a => (M44 a, M44 a, M44 a) -> (V3 a, (V3 a, V3 a)) -> (V4 a, V3 a)
---transformStream (m, v, p) (V3 x y z, (V3 px py pz, dir)) = (transformMat !* (V4 (x + px) (y + py) (z + pz) 1), V3 0.7 0.2 0.4)
-transformStream (m, v, p) (V3 x y z, (pos, dir)) = (transformMat !* (V4 x y z 1), V3 0.7 0.2 0.4)
---transformStream (m, v, p) (vert, (V3 px py pz, dir)) = (transformMat !* (V4 (x + px) (y + py) (z + pz) 1), V3 0.7 0.2 0.4)
+transformStream :: Floating a => M44 a -> (V3 a, (V3 a, V3 a)) -> (V4 a, V3 a)
+transformStream mvp (V3 x y z, (pos, dir)) = (transformMat !* (V4 x y z 1), V3 0.7 0.2 0.4)
     where
         normDir      = vNorm dir
         axis         = cross (V3 0 0 1) normDir
@@ -156,17 +154,8 @@ transformStream (m, v, p) (V3 x y z, (pos, dir)) = (transformMat !* (V4 x y z 1)
         cosA         = cos $ angle / 2
         qAxis        = sinA *^ axis
         quat         = Quaternion cosA qAxis
-        --xaxis        = cross (V3 0 1 0) normDir
-        --yaxis        = cross normDir    xaxis
-        --rot          = V3 xaxis yaxis normDir
-        --rotationMat  = mkTransformationMat rot pos
         rotationMat  = mkTransformation quat pos
-        --(V3 x y z)   = rotate quat vert
-        --(V4 x y z _) = rotationMat !* (V4 vx vy vz 1)
-        --transformMat = p !*! rotationMat !*! v !*! m
-        transformMat = p !*! v !*! m !*! rotationMat
-        --transformMat = p !*! v !*! m
-        --transformMat = transpose $ transpose v !*! transpose p
+        transformMat = mvp !*! rotationMat
 
 --------------------------------------------------------------------------------
 
@@ -239,7 +228,7 @@ handleCamera = do
         , stateZDist  = min zmax (max zmin (z + (zdir)))
         }
 
-makeMVP :: Sim os c ds (M44 Float, M44 Float, M44 Float)
+makeMVP :: Sim os c ds (M44 Float)
 makeMVP = do
     state    <- get
     (V2 w h) <- lift getContextBuffersSize
@@ -252,8 +241,7 @@ makeMVP = do
         modelMat = mkTransformationMat modelRot (V3 0 0 0)
         projMat  = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 100
         viewMat  = mkTransformationMat identity (- V3 0 0 zDist)
-    --return $ projMat !*! viewMat !*! modelMat
-    return (modelMat, viewMat, projMat)
+    return $ projMat !*! viewMat !*! modelMat
 
 updateOctree :: O.Octree -> ([Boid], O.Octree)
 updateOctree tree = (boids', tree')
