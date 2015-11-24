@@ -74,10 +74,10 @@ actions = [ CursorAction cursorAction
 
 main :: IO ()
 main = do
-    let width    = 1200
-        height   = 800
+    let width    = 1600
+        height   = 1000
         numBoids = 1000
-        bounds   = 32
+        bounds   = 28
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
 
@@ -85,20 +85,14 @@ main = do
         uMVP      :: Buffer os (Uniform (V4 (B4 Float))) <- newBuffer 1
         boidPos   :: Buffer os (B3 Float)                <- newBuffer numBoids
         boidVerts :: Buffer os (B3 Float)                <- newBuffer 14
-        writeBuffer boidVerts 0 [ V3 (-0.1) (-0.1)   0.1
-                                , V3   0.1  (-0.1)   0.1
-                                , V3 (-0.1)   0.1    0.1
-                                , V3   0.1    0.1    0.1
-                                , V3   0.1    0.1  (-0.1)
-                                , V3   0.1  (-0.1)   0.1
-                                , V3   0.1  (-0.1) (-0.1)
-                                , V3 (-0.1) (-0.1) (-0.1)
-                                , V3   0.1    0.1  (-0.1)
-                                , V3 (-0.1)   0.1  (-0.1)
-                                , V3 (-0.1)   0.1    0.1
-                                , V3 (-0.1) (-0.1) (-0.1)
-                                , V3 (-0.1) (-0.1)   0.1
-                                , V3   0.1  (-0.1)   0.1
+        writeBuffer boidVerts 0 [ V3   0.0    0.05  0.0
+                                , V3   0.0    0.0   0.2
+                                , V3 (-0.1)   0.0   0.0
+                                , V3   0.0  (-0.05) 0.0
+                                , V3   0.0    0.05  0.0
+                                , V3   0.1    0.0   0.0
+                                , V3   0.0    0.0   0.2
+                                , V3   0.0  (-0.05) 0.0
                                 ]
 
         boids <- liftIO $ makeBoids (-bounds, -bounds, -bounds)
