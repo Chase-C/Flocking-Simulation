@@ -148,13 +148,15 @@ transformStream :: Floating a => M44 a -> (V3 a, (V3 a, V3 a)) -> (V4 a, V3 a)
 transformStream mvp (V3 x y z, (pos, dir)) = (transformMat !* (V4 x y z 1), V3 0.7 0.2 0.4)
     where
         normDir      = vNorm dir
-        axis         = cross (V3 0 0 1) normDir
-        angle        = acos $ vDot normDir (V3 0 0 1)
-        sinA         = sin $ angle / 2
-        cosA         = cos $ angle / 2
-        qAxis        = sinA *^ axis
-        quat         = Quaternion cosA qAxis
-        rotationMat  = mkTransformation quat pos
+        axis         = vNorm $ cross (V3 0 0 1) normDir
+        aAxis        = vNorm $ cross normDir axis
+        --angle        = acos $ vDot normDir (V3 0 0 1)
+        --sinA         = sin $ angle / 2
+        --cosA         = cos $ angle / 2
+        --qAxis        = sinA *^ axis
+        --quat         = Quaternion cosA qAxis
+        --rotationMat  = mkTransformation quat pos
+        rotationMat  = mkTransformationMat (transpose $ V3 axis aAxis  normDir) pos
         transformMat = mvp !*! rotationMat
 
 --------------------------------------------------------------------------------
