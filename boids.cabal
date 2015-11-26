@@ -25,3 +25,4 @@ executable boids
                        , deepseq >= 1.4.1
                        , parallel >= 3.2.0
                        , monad-par >= 0.3.4
+                       , Boolean >= 0.2.3

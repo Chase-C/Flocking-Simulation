@@ -10,6 +10,7 @@ import Control.Monad                  (unless, when, void)
 import Control.Monad.Trans.RWS.Strict (RWST, ask, asks, evalRWST, get, gets, modify, put)
 import Control.Monad.IO.Class         (liftIO)
 import Control.Monad.Trans.Class      (lift)
+import Data.Boolean                   (ifB, (>*))
 
 import Graphics.GPipe
 import qualified Graphics.GPipe.Context.GLFW as GLFW
@@ -160,7 +161,7 @@ main = do
         liftIO $ swapInterval 1
         runSim env state
 
-transformStream :: Floating a => M44 a -> ((V3 a, V3 a), (V3 a, V3 a)) -> (V4 a, V3 a)
+transformStream :: (IfB a, OrdB a, Floating a) => M44 a -> ((V3 a, V3 a), (V3 a, V3 a)) -> (V4 a, V3 a)
 transformStream mvp ((V3 x y z, norm), (pos, dir)) = (pos', color)
     where
         normDir      = vNorm dir
@@ -172,10 +173,14 @@ transformStream mvp ((V3 x y z, norm), (pos, dir)) = (pos', color)
         --qAxis        = sinA *^ axis
         --quat         = Quaternion cosA qAxis
         --rotationMat  = mkTransformation quat pos
-        rotationMat  = mkTransformationMat (transpose $ V3 axis aAxis normDir) pos
-        transformMat = mvp !*! rotationMat
+        rotationMat  = transpose $ V3 axis aAxis normDir
+        transformMat = mvp !*! mkTransformationMat rotationMat pos
         pos'         = transformMat !* (V4 x y z 1)
-        lightVal     =
+        rNorm        = rotationMat  !* norm
+        lightVal     = rNorm `dot` V3 0 1 0
+        color        = ifB (lightVal >* 0)
+                           ((0.6 + (lightVal / 1.75)) *^ V3 0.2 0.4 0.8)
+                           ((0.9 + (lightVal / 1.75)) *^ V3 0.2 0.1 0.5)
 
 --------------------------------------------------------------------------------
 
