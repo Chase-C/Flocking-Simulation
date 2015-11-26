@@ -52,9 +52,9 @@ updateBoid (Boid pos vel tar rad pred) neighbors =
 
 updateBoidRadius :: Boid -> [(Boid, Float)] -> Boid
 updateBoidRadius (Boid pos vel tar rad pred) neighbors =
-    let velUpdate = vClamp (foldl (updateVelocityRadius pos) zero neighbors) 0.01
+    let velUpdate = vClamp (foldl (updateVelocityRadius pos) zero neighbors) 0.002
         --tarUpdate = vClamp (updateTarget pos tar) 0.01
-        bndUpdate = vClamp (updateBounds pos) 0.015
+        bndUpdate = vClamp (updateBounds pos) 0.005
         newVel    = vScaleTo (vel + velUpdate + bndUpdate) 0.05
     in  Boid
           { bPos  = pos + newVel
@@ -88,3 +88,32 @@ updateBounds pos
     | len > 32  = (zero - pos) ^/ len
     | otherwise = zero
     where len = vLen pos
+
+makeModel :: Float -> [(V3 Float, V3 Float)]
+makeModel scale = map (\(v, n) -> (scale *^ v, vNorm n)) boidModel
+
+boidModel :: [(V3 Float, V3 Float)]
+boidModel = [ (V3   0    0    4,  V3 (-0.4402) 0.8805 0.1761)
+            , (V3   0    1  (-1), V3 (-0.4402) 0.8805 0.1761)
+            , (V3 (-2)   0  (-1), V3 (-0.4402) 0.8805 0.1761)
+
+            , (V3   0    0    4,  V3 0.4402 0.8805 0.1761)
+            , (V3   2    0  (-1), V3 0.4402 0.8805 0.1761)
+            , (V3   0    1  (-1), V3 0.4402 0.8805 0.1761)
+
+            , (V3   0    0    4,  V3 0.4402 (-0.8805) 0.1761)
+            , (V3   0  (-1) (-1), V3 0.4402 (-0.8805) 0.1761)
+            , (V3   2    0  (-1), V3 0.4402 (-0.8805) 0.1761)
+
+            , (V3   0    0    4,  V3 (-0.4402) (-0.8805) 0.1761)
+            , (V3 (-2)   0  (-1), V3 (-0.4402) (-0.8805) 0.1761)
+            , (V3   0  (-1) (-1), V3 (-0.4402) (-0.8805) 0.1761)
+
+            , (V3   0    1  (-1), V3 0 0 (-1))
+            , (V3   0  (-1) (-1), V3 0 0 (-1))
+            , (V3 (-2)   0  (-1), V3 0 0 (-1))
+
+            , (V3   0    1  (-1), V3 0 0 (-1))
+            , (V3   2    0  (-1), V3 0 0 (-1))
+            , (V3   0  (-1) (-1), V3 0 0 (-1))
+            ]
