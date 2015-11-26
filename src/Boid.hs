@@ -35,7 +35,7 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
             { bPos  = V3 x y z
             , bVel  = (V3 vx vy vz) * 0.001
             , bTar  = zero
-            , bRad  = 12
+            , bRad  = 16
             , bPred = False
             })
     where rtf = realToFrac
@@ -67,7 +67,7 @@ updateVelocityRadius pos vel dv (boid, radius)
             separation = separationVector nDir radius
             cohesion   = cohesionVector   nDir radius
             alignment  = alignmentVector  vel $ bVel boid
-            sn         = 2
+            sn         = 6
             cn         = 3
             an         = 4
         in  dv ^+^ (sn *^ separation)

@@ -78,7 +78,7 @@ main :: IO ()
 main = do
     let width    = 1600
         height   = 1000
-        numBoids = 30
+        numBoids = 600
         bounds   = 28
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
@@ -246,8 +246,8 @@ updateOctree tree = (boids', tree')
           boids        = O.flattenTree tree
           neighborFunc = (\b -> O.kNearestNeighbors tree (bPos b) 7 (bRad b))
           updateFunc   = (\b -> updateBoidRadius b $ neighborFunc b)
-          --boids'       = parMap rdeepseq updateFunc boids
-          boids'       = map updateFunc boids
+          boids'       = parMap rdeepseq updateFunc boids
+          --boids'       = map updateFunc boids
           tree'        = O.splitWith (O.fromList boids' center len) ((> 8) . O.count)
 
 --------------------------------------------------------------------------------
