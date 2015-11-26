@@ -132,7 +132,7 @@ main = do
               , stateDragY     = 0
               , stateDragOldX  = 0
               , stateDragOldY  = 0
-              , stateOctree    = O.splitWith (O.fromList boids (V3 0 0 0) 32) ((> 8) . O.count)
+              , stateOctree    = O.splitWith (O.fromList boids (V3 0 0 0) (fromIntegral bounds)) ((> 8) . O.count)
               }
 
         liftIO $ swapInterval 1
@@ -144,12 +144,6 @@ transformStream mvp ((V3 x y z, norm), (pos, dir)) = (pos', color)
         normDir      = vNorm dir
         axis         = vNorm $ cross (V3 0 0 1) normDir
         aAxis        = vNorm $ cross normDir axis
-        --angle        = acos $ vDot normDir (V3 0 0 1)
-        --sinA         = sin $ angle / 2
-        --cosA         = cos $ angle / 2
-        --qAxis        = sinA *^ axis
-        --quat         = Quaternion cosA qAxis
-        --rotationMat  = mkTransformation quat pos
         rotationMat  = transpose $ V3 axis aAxis normDir
         transformMat = mvp !*! mkTransformationMat rotationMat pos
         pos'         = transformMat !* (V4 x y z 1)
@@ -194,7 +188,7 @@ run = do
         writeBuffer posB 0 $ positions
         writeBuffer uMVP 0 [viewProjMat]
         render $ do
-            clearContextColor (V3 0 0 0)
+            clearContextColor (V3 0.005 0.020 0.035)
             clearContextDepth 1
             vertArray <- newVertexArray vertB
             posArray  <- newVertexArray posB
@@ -241,7 +235,7 @@ makeMVP = do
         yQuat    = axisAngle (V3 1 0 0) ya
         modelRot = fromQuaternion $ yQuat * xQuat
         modelMat = mkTransformationMat modelRot (V3 0 0 0)
-        projMat  = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 100
+        projMat  = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 200
         viewMat  = mkTransformationMat identity (- V3 0 0 zDist)
     return $ (projMat !*! viewMat !*! modelMat, viewMat !*! modelMat)
 

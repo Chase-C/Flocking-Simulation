@@ -24,12 +24,15 @@ data Boid = Boid
 
 makeBoids :: (Int, Int, Int) -> (Int, Int, Int) -> Int -> IO [Boid]
 makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
-        x <- getRandom (rtf lx) (rtf hx) :: IO Float
-        y <- getRandom (rtf ly) (rtf hy) :: IO Float
-        z <- getRandom (rtf lz) (rtf hz) :: IO Float
+        x  <- getRandom (rtf lx) (rtf hx) :: IO Float
+        y  <- getRandom (rtf ly) (rtf hy) :: IO Float
+        z  <- getRandom (rtf lz) (rtf hz) :: IO Float
+        vx <- getRandom (rtf lx) (rtf hx) :: IO Float
+        vy <- getRandom (rtf ly) (rtf hy) :: IO Float
+        vz <- getRandom (rtf lz) (rtf hz) :: IO Float
         return $ Boid
             { bPos  = V3 x y z
-            , bVel  = (V3 x y z) * 0.001
+            , bVel  = (V3 vx vy vz) * 0.001
             , bTar  = zero
             , bRad  = 2.5
             , bPred = False
