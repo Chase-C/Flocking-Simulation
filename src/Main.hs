@@ -78,7 +78,7 @@ main :: IO ()
 main = do
     let width    = 1600
         height   = 1000
-        numBoids = 1000
+        numBoids = 500
         bounds   = 28
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
