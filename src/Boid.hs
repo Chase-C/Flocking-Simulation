@@ -11,6 +11,7 @@ import GHC.Generics (Generic)
 
 import Linear
 import Utils
+import Log
 
 --------------------------------------------------------------------------------
 
@@ -34,7 +35,7 @@ makeBoids (lx, ly, lz) (hx, hy, hz) n = forM [1..n] (\_ -> do
             { bPos  = V3 x y z
             , bVel  = (V3 vx vy vz) * 0.001
             , bTar  = zero
-            , bRad  = 2.5
+            , bRad  = 12
             , bPred = False
             })
     where rtf = realToFrac
@@ -46,7 +47,7 @@ makeModel scale = map (\(v, n) -> (scale *^ v, vNorm n)) boidModel
 
 updateBoidRadius :: Boid -> [(Boid, Float)] -> Boid
 updateBoidRadius (Boid pos vel tar rad pred) neighbors =
-    let velUpdate = vClamp (foldl (updateVelocityRadius pos) zero neighbors) 0.002
+    let velUpdate = vClamp (foldl (updateVelocityRadius pos vel) zero neighbors) 0.002
         bndUpdate = vClamp (updateBounds pos) 0.005
         newVel    = vScaleTo (vel + velUpdate + bndUpdate) 0.05
     in  Boid
@@ -57,24 +58,24 @@ updateBoidRadius (Boid pos vel tar rad pred) neighbors =
           , bPred = pred
           }
 
-updateVelocityRadius :: V3 Float -> V3 Float -> (Boid, Float) -> V3 Float
-updateVelocityRadius pos vel (boid, radius)
-    | pos == bPos boid = vel
+updateVelocityRadius :: V3 Float -> V3 Float -> V3 Float -> (Boid, Float) -> V3 Float
+updateVelocityRadius pos vel dv (boid, radius)
+    | pos == bPos boid = dv
     | otherwise        =
-        let dir  = pos ^-^ (bPos boid)
+        let dir  = (bPos boid) ^-^ pos
             nDir = dir ^/ radius
             separation = separationVector nDir radius
             cohesion   = cohesionVector   nDir radius
             alignment  = alignmentVector  vel $ bVel boid
-            sn         = 1
-            cn         = 5
-            an         = 3
-        in  vel ^+^ (sn *^ separation)
-                ^+^ (cn *^ cohesion)
-                ^+^ (an *^ alignment)
+            sn         = 2
+            cn         = 3
+            an         = 4
+        in  dv ^+^ (sn *^ separation)
+               ^+^ (cn *^ cohesion)
+               ^+^ (an *^ alignment)
 
 separationVector :: V3 Float -> Float -> V3 Float
-separationVector nDir dist = (-nDir) ^/ (dist ^ 2)
+separationVector nDir dist = (-nDir) ^/ dist
 
 cohesionVector :: V3 Float -> Float -> V3 Float
 cohesionVector nDir dist = nDir ^* dist
