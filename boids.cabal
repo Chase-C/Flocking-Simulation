@@ -7,7 +7,7 @@ license:             GPL-2
 license-file:        LICENSE
 category:            Game
 build-type:          Simple
-synopsis:            A 3D boids simulation
+synopsis:            A 3D Boids-like flocking simulation coded in Haskell
 
 executable boids
   hs-source-dirs:      src
