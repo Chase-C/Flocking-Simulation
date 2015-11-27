@@ -4,6 +4,7 @@ module Main (main) where
 
 --------------------------------------------------------------------------------
 
+import Prelude                 hiding ((<*))
 import System.IO
 import Control.Parallel.Strategies    (parMap, rdeepseq)
 import Control.Monad                  (unless, when, void)
@@ -31,7 +32,7 @@ data Env os c ds = Env
     { envFPS           :: !Int
     , envZDistClosest  :: !Float
     , envZDistFarthest :: !Float
-    , envMVP           :: Buffer os (Uniform (V4 (B4 Float), V4 (B4 Float)))
+    , envMVP           :: Buffer os (Uniform (V4 (B4 Float)))
     , envBoidPositions :: Buffer os (B3 Float, B3 Float)
     , envBoidVerts     :: Buffer os (B3 Float, B3 Float)
     , envShader        :: PrimitiveArray Triangles ((B3 Float, B3 Float), (B3 Float, B3 Float))
@@ -78,15 +79,15 @@ main :: IO ()
 main = do
     let width    = 1600
         height   = 1000
-        numBoids = 600
+        numBoids = 1000
         bounds   = 28
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
 
     runContextT (GLFW.newContext' [] winConf) (ContextFormatColorDepth RGB8 Depth16) $ do
-        uMVP      :: Buffer os (Uniform (V4 (B4 Float), V4 (B4 Float))) <- newBuffer 1
-        boidPos   :: Buffer os (B3 Float, B3 Float) <- newBuffer numBoids
-        boidVerts :: Buffer os (B3 Float, B3 Float) <- newBuffer 18
+        uMVP      :: Buffer os (Uniform (V4 (B4 Float))) <- newBuffer 1
+        boidPos   :: Buffer os (B3 Float, B3 Float)      <- newBuffer numBoids
+        boidVerts :: Buffer os (B3 Float, B3 Float)      <- newBuffer 18
         writeBuffer boidVerts 0 $ makeModel 0.15
 
         boids <- liftIO $ makeBoids (-bounds, -bounds, -bounds)
@@ -94,16 +95,14 @@ main = do
 
         shader <- compileShader $ do
             primitiveStream <- toPrimitiveStream id
-            (mvp, rMat)     <- getUniform (const (uMVP, 0))
+            mvp             <- getUniform (const (uMVP, 0))
             let primitiveStream' = fmap (transformStream mvp) primitiveStream
                 colorOption      = ContextColorOption NoBlending (V3 True True True)
                 depthOption      = DepthOption Less True
                 rasterOptions    = (FrontAndBack, ViewPort 0 (V2 width height), DepthRange 0 1)
 
             fragmentStream <- rasterize (const rasterOptions) primitiveStream'
-            let getZ (V4 _ _ z _) = z
-                fragmentStream'   = withRasterizedInfo
-                    (\a x -> (a, getZ $ rasterizedFragCoord x)) fragmentStream
+            let fragmentStream' = withRasterizedInfo getColorDepth fragmentStream
 
             drawContextColorDepth (const (colorOption, depthOption)) fragmentStream'
 
@@ -139,19 +138,48 @@ main = do
         runSim env state
 
 transformStream :: (IfB a, OrdB a, Floating a) => M44 a -> ((V3 a, V3 a), (V3 a, V3 a)) -> (V4 a, V3 a)
-transformStream mvp ((V3 x y z, norm), (pos, dir)) = (pos', color)
+transformStream mvp ((vert, norm), (pos, dir)) = (pos', color)
     where
         normDir      = vNorm dir
         axis         = vNorm $ cross (V3 0 0 1) normDir
         aAxis        = vNorm $ cross normDir axis
         rotationMat  = transpose $ V3 axis aAxis normDir
         transformMat = mvp !*! mkTransformationMat rotationMat pos
-        pos'         = transformMat !* (V4 x y z 1)
+        pos'         = transformMat !* makeV4 vert
         rNorm        = rotationMat  !* norm
-        lightVal     = rNorm `dot` V3 0 1 0
-        color        = ifB (lightVal >* 0)
-                           ((0.6 + (lightVal / 1.75)) *^ V3 0.2 0.4 0.8)
-                           ((0.9 + (lightVal / 1.75)) *^ V3 0.2 0.1 0.5)
+        (V4 _ _ d _) = mvp          !* makeV4 pos
+        color        = makeColor rNorm d
+
+{-# INLINE makeV4 #-}
+makeV4 :: Num a => V3 a -> V4 a
+makeV4 (V3 x y z) = V4 x y z 1
+
+{-# INLINE interpolate #-}
+interpolate :: (IfB a, OrdB a, Floating a) => V3 a -> V3 a -> a -> V3 a
+interpolate v1 v2 t = ((1 - t') *^ v1) ^+^ (t' *^ v2)
+    where t' = sClamp 0 1 t
+
+{-# INLINE sClamp #-}
+sClamp :: (IfB a, OrdB a, Floating a) => a -> a -> a -> a
+sClamp lower upper val = minB upper (maxB lower val)
+
+{-# INLINE makeColor #-}
+makeColor :: (IfB a, OrdB a, Floating a) => V3 a -> a -> V3 a
+makeColor normal depth = color'
+    where lightVal = normal `dot` V3 0 1 0
+          cLight x = (0.6 + (x / 1.75)) *^ V3 0.2 0.4 0.8
+          cDark  x = (0.9 + (x / 1.75)) *^ V3 0.2 0.1 0.5
+          fadeVal  = (100 - depth) / 80
+          color    = caseB lightVal
+                         [ ((>*   0.1),  cLight lightVal)
+                         , ((<* (-0.1)), cDark  lightVal)
+                         ]
+                         (interpolate (cDark (-0.1)) (cLight 0.1) ((0.1 + lightVal) * 5))
+          color'   = interpolate (V3 0.0 0.015 0.03) color fadeVal
+
+getColorDepth :: V3 FFloat -> RasterizedInfo -> (V3 FFloat, FFloat)
+getColorDepth color info = (color, depth)
+    where (V4 _ _ depth _) = rasterizedFragCoord info
 
 --------------------------------------------------------------------------------
 
@@ -163,9 +191,6 @@ runSim env state =
 run :: (ContextColorFormat c, Color c Float ~ V3 Float, DepthRenderable ds)
     => Sim os c ds ()
 run = do
-    --currTime <- liftIO GLFW.getTime
-    --adjustWindow
-
     processEvents actions
     handleCamera
 
@@ -224,7 +249,7 @@ handleCamera = do
         , stateZDist  = min zmax (max zmin (z + (zdir)))
         }
 
-makeMVP :: Sim os c ds (M44 Float, M44 Float)
+makeMVP :: Sim os c ds (M44 Float)
 makeMVP = do
     state    <- get
     (V2 w h) <- lift getContextBuffersSize
@@ -237,7 +262,7 @@ makeMVP = do
         modelMat = mkTransformationMat modelRot (V3 0 0 0)
         projMat  = perspective (pi/3) (fromIntegral w / fromIntegral h) 1 200
         viewMat  = mkTransformationMat identity (- V3 0 0 zDist)
-    return $ (projMat !*! viewMat !*! modelMat, viewMat !*! modelMat)
+    return $ projMat !*! viewMat !*! modelMat
 
 updateOctree :: O.Octree -> ([Boid], O.Octree)
 updateOctree tree = (boids', tree')
