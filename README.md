@@ -7,9 +7,9 @@ A 3D Boids-like flocking simulation coded in Haskell.
 Bulding
 -------
 
-Assuming you have GHC 7.10 and stack installed, building the program should be as easy as running 'stack build'.
+Assuming you have GHC 7.10 and stack installed, building the program should be as easy as running `stack build`.
 
-You can then run the simulation with the command 'stack exec boids'.
+You can then run the simulation with the command `stack exec boids`.
 
 
 Demo and Screenshots
@@ -30,9 +30,9 @@ Usage
 
 The controls are very simple:
 
-    * Click and drag with the mouse to move the camera around.
-    * Use the 'w' and 's' keys to zoom in and out.
-    * Quit the application by pressing 'q', the escape key, or closing the window.
+Click and drag with the mouse to move the camera around.  
+Use the 'w' and 's' keys to zoom in and out.  
+Quit the application by pressing 'q', the escape key, or closing the window.
 
 
 Details
