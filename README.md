@@ -12,10 +12,12 @@ Assuming you have GHC 7.10 and stack installed, building the program should be a
 You can then run the simulation with the command 'stack exec boids'.
 
 
-Screenshots
------------
+Demo and Screenshots
+--------------------
 
-This is a screenshot just after starting the program, when the boids are beginning to organize into groups.
+[Here is a video demonstrating a typical run with the default configuration.](https://youtu.be/jn4hNzcmsZU)
+
+This is just after starting the program, when the boids are beginning to organize into groups.
 ![Screenshot](screenshot1.png)
 
 
