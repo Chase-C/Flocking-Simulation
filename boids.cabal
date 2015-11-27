@@ -12,7 +12,7 @@ synopsis:            A 3D Boids-like flocking simulation coded in Haskell
 executable boids
   hs-source-dirs:      src
   main-is:             Main.hs
-  ghc-options:         -O1 -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -O2 -Wall -threaded -rtsopts -with-rtsopts=-N
   extensions:          DoAndIfThenElse
   build-depends:       base
                        , random >= 1.0
