@@ -26,11 +26,11 @@ After running for a while, much larger groups of boids form.
 Usage
 -----
 
-The controls are very simple.
+The controls are very simple:
 
-Click and drag with the mouse to move the camera around.
-Use the 'w' and 's' keys to zoom in and out.
-Quit the application by pressing 'q', the escape key, or closing the window.
+    * Click and drag with the mouse to move the camera around.
+    * Use the 'w' and 's' keys to zoom in and out.
+    * Quit the application by pressing 'q', the escape key, or closing the window.
 
 
 Details
