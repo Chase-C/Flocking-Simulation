@@ -46,7 +46,7 @@ makeColor normal depth = color'
                          , ((<* (-0.1)), cDark  lightVal)
                          ]
                          (interpolate (cDark (-0.1)) (cLight 0.1) ((0.1 + lightVal) * 5))
-          color'   = interpolate (V3 0.0 0.015 0.035) color fadeVal
+          color'   = interpolate (V3 0.010 0.015 0.035) color fadeVal
 
 {-# INLINE getColorDepth #-}
 getColorDepth :: V3 FFloat -> RasterizedInfo -> (V3 FFloat, FFloat)
