@@ -26,3 +26,4 @@ executable boids
                        , parallel >= 3.2.0
                        , monad-par >= 0.3.4
                        , Boolean >= 0.2.3
+                       , ReadArgs >= 1.2.2
