@@ -10,6 +10,7 @@ import Control.Monad                  (unless, when, void)
 import Control.Monad.Trans.RWS.Strict (RWST, ask, asks, evalRWST, get, gets, modify, put)
 import Control.Monad.IO.Class         (liftIO)
 import Control.Monad.Trans.Class      (lift)
+import ReadArgs                       (readArgs)
 
 import Graphics.GPipe
 import qualified Graphics.GPipe.Context.GLFW as GLFW
@@ -75,9 +76,12 @@ actions = [ CursorAction cursorAction
 
 main :: IO ()
 main = do
+    ( maybeNumBoids :: Maybe Int ) <- readArgs
     let width    = 1600
         height   = 1000
-        numBoids = 1000
+        numBoids = case maybeNumBoids of
+                     (Just n) -> n
+                     _ -> 1000
         bounds   = 28
         winConf :: GLFW.WindowConf
         winConf = GLFW.WindowConf width height "Flocking Simulation"
